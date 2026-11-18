@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garage KZ Auto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Direction : atelier de nuit, fond noir chaud, rouge KZ pour l'action, vert réservé aux états "OK". Mise en page : site public centré, espace pro en barre latérale + kanban. */
+:root{
+  --bg:#0b0b0c; --panel:#141416; --panel2:#1b1b1e; --line:#2a2a2e;
+  --text:#f4f4f5; --muted:#9b9ba3; --red:#e0221b; --red-d:#b51812; --ok:#33c27a; --warn:#f0b429; --info:#4b8cf5;
+  --display:'Barlow Condensed','Arial Narrow',Arial,sans-serif; --body:'Barlow',system-ui,Arial,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);font-size:16px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);margin:0;line-height:1.05;text-wrap:balance}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+.hidden{display:none!important}
+
+/* barre de navigation */
+.nav{position:sticky;top:0;z-index:20;background:rgba(11,11,12,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;height:60px;gap:12px}
+.brand{font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:.02em;display:flex;align-items:center;gap:10px}
+.brand i{display:inline-grid;place-items:center;width:30px;height:30px;border:2px solid var(--red);border-radius:50%;font-style:normal;font-size:13px;color:var(--red)}
+.brand b{color:var(--red)}
+.nav-links{display:flex;align-items:center;gap:22px;font-weight:600}
+.nav-links a:hover{color:var(--red)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:999px;padding:12px 22px;font-weight:700;background:var(--red);color:#fff;transition:background .15s}
+.btn:hover{background:var(--red-d)}
+.btn.sm{padding:7px 16px;font-size:14px}
+.btn.ghost{background:var(--panel2);border:1px solid var(--line)}
+.btn.ghost:hover{background:#26262a}
+.btn.wa{background:transparent;border:1px solid var(--ok);color:var(--ok)}
+.btn.wa:hover{background:rgba(51,194,122,.12)}
+.btn.wa-solid{background:#25a862}
+.btn.wa-solid:hover{background:#1e8e52}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+
+/* accueil */
+.hero{position:relative;padding:96px 0 80px;text-align:center;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 0%,rgba(224,34,27,.22),transparent 60%),
+  repeating-linear-gradient(115deg,#111113 0 36px,#0d0d0f 36px 72px)}
+.hero h1{font-size:clamp(52px,11vw,112px);font-weight:800;letter-spacing:.01em}
+.hero h1 b{color:var(--red)}
+.hero p{max-width:560px;margin:18px auto 28px;color:#cfcfd4;font-size:19px}
+.hero .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.hero .badges{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:34px;color:var(--muted);font-size:14px}
+.badges span{border:1px solid var(--line);border-radius:999px;padding:5px 14px;background:rgba(20,20,22,.7)}
+section.block{padding:70px 0}
+section.block h2{font-size:clamp(34px,5vw,48px);text-align:center;margin-bottom:8px}
+section.block .sub{text-align:center;color:var(--muted);margin:0 auto 36px;max-width:520px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+.card h3{font-size:24px;margin:10px 0 6px}
+.card p{margin:0;color:var(--muted);font-size:15px}
+.ico{width:42px;height:42px;border-radius:10px;background:rgba(224,34,27,.12);color:var(--red);display:grid;place-items:center}
+.ico svg{width:22px;height:22px}
+.rating{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;align-items:stretch}
+.rating .card{text-align:center;min-width:220px}
+.rating .big{font-family:var(--display);font-size:64px;font-weight:800;line-height:1}
+.stars{color:var(--warn);letter-spacing:3px;margin:6px 0}
+.hours{width:100%;max-width:420px;margin:0 auto;border-collapse:collapse}
+.hours td{padding:9px 0;border-bottom:1px solid var(--line)}
+.hours td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.hours tr.today td{color:var(--red);font-weight:700}
+.contact{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:30px;align-items:start}
+footer{border-top:1px solid var(--line);padding:26px 0;color:var(--muted);font-size:14px;text-align:center}
+
+/* page rendez-vous */
+.page-title{text-align:center;padding:56px 0 28px}
+.page-title h1{font-size:clamp(40px,7vw,60px);font-weight:800}
+.page-title p{color:var(--muted);margin:8px 0 0}
+.form-card{max-width:760px;margin:0 auto 70px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px 18px}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}.nav-links a.hide-s{display:none}}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);font-weight:600}
+input,select{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit;font-size:15px}
+input:focus,select:focus{outline:2px solid var(--red);outline-offset:0;border-color:var(--red)}
+input::placeholder{color:#6b6b73}
+.full{grid-column:1/-1}
+.slots-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.slots-head strong{font-size:13px;color:var(--muted);font-weight:600}
+.legend{font-size:12px;color:var(--muted);display:flex;gap:14px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.slot-groups{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+.slot-groups .lbl{font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.slot{padding:11px 6px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);font-weight:700;font-variant-numeric:tabular-nums;text-align:center}
+.slot:hover:not([disabled]){border-color:var(--red)}
+.slot.sel{background:var(--red);border-color:var(--red);color:#fff}
+.slot[disabled]{cursor:not-allowed;color:#55555c;background:transparent;border-style:dashed;text-decoration:line-through}
+.slot small{display:block;font-size:10px;font-weight:600;text-decoration:none;letter-spacing:.04em;color:#6f6f77}
+.notice{margin-top:12px;padding:12px 14px;border-radius:10px;background:var(--panel2);color:var(--muted);font-size:14px}
+.err{color:#ff7a74;font-size:14px;margin-top:10px;min-height:20px}
+.actions{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.success{text-align:center;padding:30px 10px;background:rgba(51,194,122,.08);border:1px solid rgba(51,194,122,.3);border-radius:14px}
+.success h2{color:var(--ok);font-size:40px}
+.success p{color:#cfd8d2;margin:8px 0 18px}
+.success .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+
+/* espace pro */
+.pro{display:grid;grid-template-columns:230px 1fr;min-height:calc(100vh - 60px)}
+@media(max-width:820px){.pro{grid-template-columns:1fr}.side{flex-direction:row!important;overflow-x:auto;border-right:0!important;border-bottom:1px solid var(--line)}.side .sp{display:none}}
+.side{background:#0e0e10;border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:6px}
+.side button{display:flex;align-items:center;gap:10px;background:none;border:0;border-radius:10px;padding:11px 12px;color:var(--muted);font-weight:600;text-align:left;white-space:nowrap}
+.side button:hover{background:var(--panel2);color:var(--text)}
+.side button.on{background:rgba(224,34,27,.14);color:#fff}
+.side .sp{flex:1}
+.pill{background:var(--red);color:#fff;border-radius:999px;font-size:11px;padding:1px 8px;margin-left:auto}
+.main{padding:28px 24px 60px;max-width:1100px}
+.main h1{font-size:40px;font-weight:800}
+.main .lead{color:var(--muted);margin:4px 0 22px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:22px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.tile b{display:block;font-family:var(--display);font-size:44px;line-height:1;font-weight:800;margin-top:10px}
+.tile span{color:var(--muted);font-size:13px}
+.two{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+@media(max-width:820px){.two{grid-template-columns:1fr}}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.box h3{font-size:22px;margin-bottom:12px}
+.row-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border-radius:10px;background:var(--panel2);margin-bottom:8px}
+.row-item small{color:var(--muted);display:block}
+.tag{font-size:11px;font-weight:700;border-radius:6px;padding:3px 8px;letter-spacing:.04em;white-space:nowrap}
+.tag.wait{background:rgba(240,180,41,.14);color:var(--warn)}
+.tag.prog{background:rgba(75,140,245,.15);color:var(--info)}
+.tag.done{background:rgba(51,194,122,.14);color:var(--ok)}
+.quick button{width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:8px}
+.quick button:hover{border-color:var(--red)}
+.quick small{display:block;color:var(--muted)}
+.kanban{display:grid;grid-template-columns:repeat(3,minmax(250px,1fr));gap:14px;overflow-x:auto;padding-bottom:6px}
+.col{background:#101012;border:1px solid var(--line);border-radius:14px;padding:12px;min-height:260px}
+.col h3{font-size:19px;display:flex;align-items:center;gap:8px;margin-bottom:12px;font-family:var(--body);font-weight:700}
+.col h3 .dot{width:9px;height:9px;border-radius:50%}
+.col h3 em{margin-left:auto;font-style:normal;background:var(--panel2);border-radius:999px;padding:0 9px;font-size:13px;color:var(--muted)}
+.job{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}
+.job .svc{font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.06em}
+.job h4{margin:4px 0 2px;font-size:18px}
+.job .meta{color:var(--muted);font-size:14px}
+.job .foot{display:flex;gap:6px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.chip{font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-variant-numeric:tabular-nums}
+.job .foot .sp{flex:1}
+.mini{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 11px;font-size:13px;font-weight:600}
+.mini:hover{border-color:var(--red)}
+.mini.go{background:var(--red);border-color:var(--red)}
+.mini.x{color:#ff8a84}
+table.t{width:100%;border-collapse:collapse;font-size:15px}
+table.t th{text-align:left;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--line)}
+table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto}
+.login{max-width:400px;margin:60px auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:30px;text-align:center}
+.login h1{font-size:38px;margin:10px 0 2px}
+.login .ico{margin:0 auto}
+.login form{display:flex;flex-direction:column;gap:14px;text-align:left;margin-top:20px}
+.demo-note{font-size:12px;color:var(--muted);margin-top:14px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:grid;place-items:center;z-index:50;padding:16px}
+.modal .box{width:100%;max-width:440px}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" data-go="home"><i>KZ</i><span><b>KZ</b> AUTO</span></a>
+    <nav class="nav-links" id="publicNav">
+      <a class="hide-s" href="#top" data-go="home">Accueil</a>
+      <a class="hide-s" href="#expertise" data-go="home">Expertise</a>
+      <a class="hide-s" href="#avis" data-go="home">Avis</a>
+      <a class="btn sm" href="#rdv">Prendre RDV</a>
+    </nav>
+    <nav class="nav-links hidden" id="proNav">
+      <a class="hide-s" href="#top" data-go="home">Voir le site</a>
+      <a class="btn sm" href="#rdv">Prendre RDV</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ACCUEIL -->
+<main id="v-home">
+  <section class="hero" id="top">
+    <div class="wrap">
+      <h1>GARAGE <b>KZ AUTO</b></h1>
+      <p>Mécanique, entretien et diagnostic toute marque, au cœur de Saint-Étienne. Réservez un créneau libre en ligne en 30 secondes.</p>
+      <div class="cta">
+        <a class="btn" href="#rdv">Prendre rendez-vous</a>
+        <a class="btn ghost" href="tel:+33766769091">07 66 76 90 91</a>
+      </div>
+      <div class="badges"><span>65 rue Rouget de Lisle, 42000</span><span>Ouvert du lundi au samedi</span><span>Réponse rapide sur WhatsApp</span></div>
+    </div>
+  </section>
+
+  <section class="block" id="expertise">
+    <div class="wrap">
+      <h2>Notre expertise</h2>
+      <p class="sub">Un atelier indépendant pour entretenir et réparer votre véhicule, quelle que soit la marque.</p>
+      <div class="cards">
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></div><h3>Mécanique</h3><p>Diagnostic précis, réparations, embrayage, distribution.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><h3>Révision et vidange</h3><p>Entretien périodique selon le carnet constructeur.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg></div><h3>Pneumatiques</h3><p>Montage, équilibrage, passage été et hiver.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg></div><h3>Freins et plaquettes</h3><p>Contrôle, remplacement, purge du circuit.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14h16M6 14l1.5-5h9L18 14M7 18h.01M17 18h.01"/></svg></div><h3>Service rapide</h3><p>Petites interventions sur créneau libre, sans attente.</p></div>
+        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg></div><h3>Climatisation</h3><p>Recharge, contrôle d'étanchéité et réparation.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="avis" style="background:#0e0e10">
+    <div class="wrap">
+      <h2>Avis clients</h2>
+      <p class="sub">Ce que nos clients disent de nous sur Google.</p>
+      <div class="rating" style="margin-bottom:22px">
+        <div class="card"><div class="big">4,7</div><div class="stars">★★★★★</div><p>sur 5, d'après 65 avis Google</p></div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="stars">★★★★★</div><p style="color:var(--text)">« Meilleur garage de Saint-Étienne. Rapide, efficace et les tarifs sont clairement corrects. Très professionnel ! »</p><h3 style="font-size:18px;margin-top:14px">Auriane N</h3><p>Avis Google</p></div>
+        <div class="card"><div class="stars">★★★★★</div><p style="color:var(--text)">« J'y ai fait toutes mes réparations sur ma 307 et sur une Polo 5. Réparations rapides et très bon prix par rapport à d'autres garages aux alentours. »</p><h3 style="font-size:18px;margin-top:14px">Ahmed H</h3><p>Avis Google</p></div>
+        <div class="card"><div class="stars">★★★★★</div><p style="color:var(--text)">« Problème de FAP et d'injecteurs sur ma C4 Aircross : diagnostic complet et réparation dans un délai très court. Prix honnête, équipe très professionnelle. »</p><h3 style="font-size:18px;margin-top:14px">Laura Crochot</h3><p>Avis Google</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="horaires">
+    <div class="wrap contact">
+      <div>
+        <h2 style="text-align:left">Horaires</h2>
+        <p class="sub" style="text-align:left;margin-left:0">Les créneaux de réservation suivent ces horaires.</p>
+        <table class="hours" id="hoursTable"></table>
+      </div>
+      <div>
+        <h2 style="text-align:left">Nous trouver</h2>
+        <p class="sub" style="text-align:left;margin-left:0">65 rue Rouget de Lisle<br>42000 Saint-Étienne<br>07 66 76 90 91</p>
+        <a class="btn wa" href="https://wa.me/33766769091" target="_blank" rel="noopener">Écrire sur WhatsApp</a>
+      </div>
+    </div>
+  </section>
+  <footer>© Garage KZ Auto, Saint-Étienne · <a href="#pro" style="text-decoration:underline">Espace pro</a></footer>
+</main>
+
+<!-- PRISE DE RDV -->
+<main id="v-rdv" class="hidden">
+  <div class="wrap">
+    <div class="page-title"><h1>Prendre Rendez-vous</h1><p>Choisissez un créneau libre ou envoyez-nous un WhatsApp directement.</p></div>
+    <div class="form-card" id="formCard">
+      <form id="bookForm" novalidate>
+        <div class="grid2">
+          <label class="f">Nom complet<input id="b_name" autocomplete="name" placeholder="Prénom Nom"></label>
+          <label class="f">Service
+            <select id="b_service">
+              <option>Révision</option><option>Vidange</option><option>Diagnostic moteur</option><option>Freins et plaquettes</option><option>Pneumatiques</option><option>Climatisation</option><option>Autre</option>
+            </select></label>
+          <label class="f">Téléphone<input id="b_phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78"></label>
+          <label class="f">Date disponible<input id="b_date" type="date"></label>
+          <label class="f">Email (optionnel)<input id="b_email" type="email" autocomplete="email" placeholder="vous@exemple.fr"></label>
+          <label class="f">Modèle du véhicule<input id="b_car" placeholder="Ex : Clio 4"></label>
+
+          <div class="full">
+            <div class="slots-head"><strong id="slotTitle">Créneaux disponibles</strong>
+              <div class="legend"><span><i style="background:var(--panel2);border:1px solid var(--line)"></i>Libre</span><span><i style="background:var(--red)"></i>Choisi</span><span><i style="border:1px dashed #55555c"></i>Pris</span></div></div>
+            <div id="slotBox"></div>
+          </div>
+        </div>
+        <div class="err" id="formErr" role="alert"></div>
+        <div class="actions">
+          <button class="btn" type="submit" id="submitBtn">Confirmer la réservation</button>
+          <a class="btn wa" id="waBtn" href="https://wa.me/33766769091" target="_blank" rel="noopener">Réserver via WhatsApp</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+
+<!-- ESPACE PRO : connexion -->
+<main id="v-login" class="hidden">
+  <div class="wrap">
+    <div class="login">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></div>
+      <h1>KZ AUTO PRO</h1>
+      <p style="color:var(--muted);margin:0">Système de gestion réservé au personnel</p>
+      <form id="loginForm">
+        <label class="f">Identifiant<input id="l_user" value="admin" autocomplete="username"></label>
+        <label class="f">Mot de passe<input id="l_pass" type="password" value="demo1234" autocomplete="current-password"></label>
+        <button class="btn" type="submit">Accéder au dashboard</button>
+      </form>
+      <p class="demo-note">Aperçu : n'importe quel identifiant fonctionne. La vraie version aura un mot de passe.</p>
+    </div>
+  </div>
+</main>
+
+<!-- ESPACE PRO : application -->
+<div id="v-pro" class="pro hidden">
+  <aside class="side">
+    <button data-p="dash" class="on">Vue d'ensemble</button>
+    <button data-p="rdv">Rendez-vous <span class="pill" id="pillWait">0</span></button>
+    <button data-p="clients">Clients et autos</button>
+    <button data-p="devis">Devis et factures</button>
+    <div class="sp"></div>
+    <button id="logoutBtn">Déconnexion</button>
+  </aside>
+  <section class="main" id="proMain"></section>
+</div>
+
+<div id="modalRoot"></div>
+
+<script>
+/* ============ Configuration du garage ============ */
+const GARAGE = { nom:'Garage KZ Auto', tel:'07 66 76 90 91', wa:'33766769091', adresse:'65 rue Rouget de Lisle, 42000 Saint-Étienne' };
+const SLOT_MIN = 60; // durée d'un créneau en minutes
+// Jours : 0 = dimanche … 6 = samedi. Plages [début, fin] en heures.
+const HOURS = {
+  0:[],
+  1:[[8,12],[14,18]], 2:[[8,12],[14,18]], 3:[[8,12],[14,18]], 4:[[8,12],[14,18]], 5:[[8,12],[14,18]],
+  6:[[9,16]]
+};
+const DAYS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+const STATUS = { wait:'À prendre en charge', prog:'En cours (atelier)', done:'Terminé (prêt)' };
+
+/* ============ État ============ */
+const KEY='kz-auto-preview-v1';
+let state = load() || seed();
+function pad(n){return String(n).padStart(2,'0')}
+function ymd(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function parse(s){const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
+function fmtDate(s){const d=parse(s);return DAYS[d.getDay()].slice(0,3)+' '+pad(d.getDate())+'/'+pad(d.getMonth()+1)}
+function nextOpen(from){const d=new Date(from);for(let i=0;i<14;i++){if(HOURS[d.getDay()].length)return d;d.setDate(d.getDate()+1)}return d}
+function seed(){
+  const d=ymd(nextOpen(new Date(Date.now()+864e5)));
+  return { pro:false, id:5, docs:[
+      {n:'DEV-1001',client:'Client exemple A',date:d,montant:450.5,statut:'En attente'},
+      {n:'FAC-1002',client:'Client exemple B',date:d,montant:290,statut:'Payée'}],
+    appts:[
+    {id:1,name:'Client exemple A',phone:'0612345678',email:'',car:'Peugeot 308',service:'Révision',date:d,time:'09:00',status:'wait'},
+    {id:2,name:'Client exemple B',phone:'0698765432',email:'',car:'Audi A3',service:'Freins et plaquettes',date:d,time:'14:00',status:'wait'},
+    {id:3,name:'Client exemple C',phone:'0611223344',email:'',car:'Renault Clio',service:'Diagnostic moteur',date:ymd(new Date()),time:'08:00',status:'prog'},
+    {id:4,name:'Client exemple D',phone:'0655443322',email:'',car:'Citroën C3',service:'Pneumatiques',date:ymd(new Date()),time:'08:00',status:'done'}
+  ]};
+}
+function load(){try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):null}catch(e){return null}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
+
+/* ============ Créneaux ============ */
+function slotsFor(dateStr){
+  const d=parse(dateStr), out=[];
+  for(const [a,b] of HOURS[d.getDay()]){
+    for(let m=a*60;m+SLOT_MIN<=b*60;m+=SLOT_MIN) out.push(pad(Math.floor(m/60))+':'+pad(m%60));
+  }
+  return out;
+}
+function isTaken(date,time){return state.appts.some(a=>a.date===date&&a.time===time)}
+function isPast(date,time){const [h,m]=time.split(':').map(Number);const d=parse(date);d.setHours(h,m);return d<=new Date()}
+function freeCount(date){return slotsFor(date).filter(t=>!isTaken(date,t)&&!isPast(date,t)).length}
+
+/* ============ Routage ============ */
+const views=['home','rdv','login','pro'];
+function show(v){views.forEach(x=>document.getElementById('v-'+x).classList.toggle('hidden',x!==v));
+  document.getElementById('publicNav').classList.toggle('hidden',v==='pro');
+  document.getElementById('proNav').classList.toggle('hidden',v!=='pro');}
+let proPage='dash';
+function route(){
+  const h=location.hash.replace('#','');
+  if(h==='rdv'){show('rdv');initBooking();window.scrollTo(0,0);return}
+  if(h==='pro'){ if(state.pro){show('pro');renderPro()} else {show('login')} window.scrollTo(0,0);return}
+  show('home');
+  const el=h&&document.getElementById(h); if(el) el.scrollIntoView(); else window.scrollTo(0,0);
+}
+window.addEventListener('hashchange',route);
+document.querySelectorAll('[data-go="home"]').forEach(a=>a.addEventListener('click',()=>{ if(!location.hash||location.hash==='#'+a.getAttribute('href').slice(1)) setTimeout(route,0)}));
+
+/* ============ Horaires (accueil) ============ */
+(function(){
+  const t=document.getElementById('hoursTable'), today=new Date().getDay();
+  const order=[1,2,3,4,5,6,0];
+  t.innerHTML=order.map(i=>{
+    const r=HOURS[i].map(([a,b])=>a+'h – '+b+'h').join(' · ')||'Fermé';
+    return '<tr class="'+(i===today?'today':'')+'"><td>'+DAYS[i]+'</td><td>'+r+'</td></tr>';
+  }).join('');
+})();
+
+/* ============ Réservation ============ */
+let chosen=null;
+const $=id=>document.getElementById(id);
+function initBooking(){
+  if(!$('bookForm')) return;
+  const today=new Date(), first=ymd(nextOpen(today));
+  $('b_date').min=ymd(today);
+  if(!$('b_date').value||$('b_date').value<ymd(today)) $('b_date').value=first;
+  renderSlots(); updateWa();
+}
+function renderSlots(){
+  const date=$('b_date').value, box=$('slotBox'); chosen=chosen&&chosen.date===date?chosen:null;
+  if(!date){box.innerHTML='';return}
+  const list=slotsFor(date);
+  const dname=DAYS[parse(date).getDay()];
+  if(!list.length){ $('slotTitle').textContent='Créneaux disponibles';
+    box.innerHTML='<div class="notice">Le garage est fermé le '+dname.toLowerCase()+'. Choisissez un autre jour.</div>'; return }
+  const free=freeCount(date);
+  $('slotTitle').textContent=dname+' '+fmtDate(date).slice(4)+' · '+(free?free+' créneau'+(free>1?'x':'')+' libre'+(free>1?'s':''):'complet');
+  const groups=[['Matin',list.filter(t=>+t.slice(0,2)<12)],['Après-midi',list.filter(t=>+t.slice(0,2)>=12)]].filter(g=>g[1].length);
+  box.innerHTML='<div class="slot-groups">'+groups.map(([lbl,arr])=>'<div><div class="lbl">'+lbl+'</div><div class="slots">'+arr.map(t=>{
+    const taken=isTaken(date,t), past=isPast(date,t), dis=taken||past;
+    return '<button type="button" class="slot'+(chosen&&chosen.time===t?' sel':'')+'" data-t="'+t+'"'+(dis?' disabled':'')+'>'+t.replace(':','h')+(dis?'<small>'+(taken?'PRIS':'PASSÉ')+'</small>':'')+'</button>';
+  }).join('')+'</div></div>').join('')+'</div>'+(free?'':'<div class="notice">Plus aucun créneau ce jour-là. Essayez un autre jour.</div>');
+  box.querySelectorAll('.slot:not([disabled])').forEach(b=>b.addEventListener('click',()=>{chosen={date,time:b.dataset.t};$('formErr').textContent='';renderSlots();updateWa()}));
+}
+function updateWa(){
+  const f=getForm();
+  const msg='Bonjour, je souhaite un rendez-vous au Garage KZ Auto.'+
+    (f.service?'\nService : '+f.service:'')+(f.car?'\nVéhicule : '+f.car:'')+
+    (chosen?'\nCréneau : '+fmtDate(chosen.date)+' à '+chosen.time.replace(':','h'):'')+(f.name?'\nNom : '+f.name:'');
+  $('waBtn').href='https://wa.me/'+GARAGE.wa+'?text='+encodeURIComponent(msg);
+}
+function getForm(){return{name:$('b_name').value.trim(),phone:$('b_phone').value.trim(),email:$('b_email').value.trim(),car:$('b_car').value.trim(),service:$('b_service').value}}
+['b_name','b_phone','b_email','b_car','b_service'].forEach(id=>$(id).addEventListener('input',updateWa));
+$('b_date').addEventListener('change',()=>{chosen=null;renderSlots();updateWa()});
+$('bookForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const f=getForm(), err=$('formErr');
+  if(!f.name) return err.textContent='Indiquez votre nom.';
+  if(f.phone.replace(/\D/g,'').length<10) return err.textContent='Indiquez un numéro de téléphone à 10 chiffres.';
+  if(f.email&&!/^\S+@\S+\.\S+$/.test(f.email)) return err.textContent='Cet email semble incorrect.';
+  if(!f.car) return err.textContent='Indiquez le modèle du véhicule.';
+  if(!chosen) return err.textContent='Choisissez un créneau libre.';
+  if(isTaken(chosen.date,chosen.time)){chosen=null;renderSlots();return err.textContent='Ce créneau vient d\'être pris. Choisissez-en un autre.'}
+  const a={id:state.id++,...f,date:chosen.date,time:chosen.time,status:'wait'};
+  state.appts.push(a); save();
+  const msg='Bonjour, c\'est '+f.name+'. Je confirme mon rendez-vous du '+fmtDate(a.date)+' à '+a.time.replace(':','h')+' pour : '+f.service+' ('+f.car+').';
+  $('formCard').innerHTML='<div class="success"><h2>Demande envoyée !</h2><p>Votre créneau du <b>'+fmtDate(a.date)+' à '+a.time.replace(':','h')+'</b> est réservé. Il n\'est plus proposé aux autres clients.</p><div class="row"><a class="btn wa-solid" target="_blank" rel="noopener" href="https://wa.me/'+GARAGE.wa+'?text='+encodeURIComponent(msg)+'">Confirmer sur WhatsApp</a><button class="btn ghost" id="again">Nouvelle réservation</button></div></div>';
+  $('again').addEventListener('click',()=>location.reload());
+});
+
+/* ============ Espace pro ============ */
+$('loginForm').addEventListener('submit',e=>{e.preventDefault();state.pro=true;save();location.hash='pro';route()});
+$('logoutBtn').addEventListener('click',()=>{state.pro=false;save();location.hash='pro';route()});
+document.querySelectorAll('.side [data-p]').forEach(b=>b.addEventListener('click',()=>{proPage=b.dataset.p;renderPro()}));
+
+function wa(phone,text){let p=phone.replace(/\D/g,'');if(p.startsWith('0'))p='33'+p.slice(1);return 'https://wa.me/'+p+'?text='+encodeURIComponent(text)}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function clients(){const m={};state.appts.forEach(a=>{const k=a.phone.replace(/\D/g,'');(m[k]=m[k]||{name:a.name,phone:a.phone,cars:new Set(),n:0});m[k].cars.add(a.car);m[k].n++});return Object.values(m)}
+
+function renderPro(){
+  document.querySelectorAll('.side [data-p]').forEach(b=>b.classList.toggle('on',b.dataset.p===proPage));
+  const waiting=state.appts.filter(a=>a.status==='wait').length; $('pillWait').textContent=waiting; $('pillWait').classList.toggle('hidden',!waiting);
+  const m=$('proMain');
+  if(proPage==='dash') m.innerHTML=dashHtml();
+  if(proPage==='rdv') m.innerHTML=kanbanHtml();
+  if(proPage==='clients') m.innerHTML=clientsHtml();
+  if(proPage==='devis') m.innerHTML=devisHtml();
+  bindPro();
+}
+function dashHtml(){
+  const w=state.appts.filter(a=>a.status==='wait').length, p=state.appts.filter(a=>a.status==='prog').length;
+  const recent=[...state.appts].sort((a,b)=>b.id-a.id).slice(0,5);
+  return '<div class="top"><div><h1>Tableau de bord</h1><p class="lead">Bienvenue dans votre espace de gestion.</p></div><button class="btn" data-act="newrdv">+ Nouveau rendez-vous</button></div>'+
+  '<div class="tiles"><div class="tile"><span>RDV en attente</span><b>'+w+'</b></div><div class="tile"><span>Véhicules en atelier</span><b>'+p+'</b></div><div class="tile"><span>Total clients</span><b>'+clients().length+'</b></div></div>'+
+  '<div class="two"><div class="box"><h3>Activité récente</h3>'+(recent.map(a=>'<div class="row-item"><div><b>'+esc(a.name)+'</b> <span style="color:var(--muted)">('+esc(a.car)+')</span><small>'+esc(a.service)+' · '+fmtDate(a.date)+' '+a.time.replace(':','h')+'</small></div><span class="tag '+a.status+'">'+STATUS[a.status].toUpperCase()+'</span></div>').join('')||'<p style="color:var(--muted)">Aucun rendez-vous.</p>')+'</div>'+
+  '<div class="box quick"><h3>Actions rapides</h3><button data-act="newdoc">Créer un devis<small>Ajouter un document client</small></button><button data-act="gotorv">Voir les rendez-vous<small>Atelier en temps réel</small></button><button data-act="reset">Remettre les données d\'exemple<small>Réinitialise l\'aperçu</small></button></div></div>';
+}
+function kanbanHtml(){
+  const col=(k,color)=>{const items=state.appts.filter(a=>a.status===k).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+    return '<div class="col"><h3><span class="dot" style="background:'+color+'"></span>'+STATUS[k]+'<em>'+items.length+'</em></h3>'+items.map(a=>{
+      const msgs={prog:'Bonjour '+a.name+', c\'est le Garage KZ AUTO. Votre véhicule ('+a.car+') est en cours d\'intervention dans notre atelier.',done:'Bonjour '+a.name+', bonne nouvelle ! Votre véhicule ('+a.car+') est prêt et vous attend au Garage KZ AUTO. Vous pouvez venir le récupérer.',wait:'Bonjour '+a.name+', c\'est le Garage KZ AUTO. Nous confirmons votre rendez-vous du '+fmtDate(a.date)+' à '+a.time.replace(':','h')+'.'};
+      return '<div class="job"><div class="svc">'+esc(a.service)+'</div><h4>'+esc(a.car)+'</h4><div class="meta">'+esc(a.name)+' · '+esc(a.phone)+'</div><div class="foot"><span class="chip">'+fmtDate(a.date)+' · '+a.time.replace(':','h')+'</span><span class="sp"></span>'+
+      '<a class="mini" target="_blank" rel="noopener" href="'+wa(a.phone,msgs[k])+'">WhatsApp</a>'+
+      (k==='wait'?'<button class="mini go" data-mv="'+a.id+':prog">Commencer</button>':k==='prog'?'<button class="mini go" data-mv="'+a.id+':done">Terminer</button>':'')+
+      '<button class="mini x" data-del="'+a.id+'" title="Supprime le RDV et libère le créneau">Supprimer</button></div></div>'}).join('')+'</div>'};
+  return '<div class="top"><div><h1>Rendez-vous et atelier</h1><p class="lead">Gérez le flux des réparations. Supprimer un RDV libère son créneau.</p></div><button class="btn" data-act="newrdv">+ Nouveau</button></div><div class="kanban">'+col('wait','var(--warn)')+col('prog','var(--info)')+col('done','var(--ok)')+'</div>';
+}
+function clientsHtml(){
+  return '<h1>Clients et autos</h1><p class="lead">Liste construite à partir des rendez-vous.</p><div class="box tablewrap"><table class="t"><thead><tr><th>Client</th><th>Téléphone</th><th>Véhicules</th><th>RDV</th></tr></thead><tbody>'+
+  clients().map(c=>'<tr><td>'+esc(c.name)+'</td><td>'+esc(c.phone)+'</td><td>'+esc([...c.cars].join(', '))+'</td><td>'+c.n+'</td></tr>').join('')+'</tbody></table></div>';
+}
+function devisHtml(){
+  const sum=(f)=>state.docs.filter(f).reduce((s,d)=>s+d.montant,0);
+  const eur=n=>n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
+  return '<div class="top"><div><h1>Devis et factures</h1><p class="lead">Suivez vos encaissements.</p></div><button class="btn" data-act="newdoc">+ Nouveau document</button></div>'+
+  '<div class="tiles"><div class="tile"><span>Encaissé</span><b style="font-size:32px">'+eur(sum(d=>d.statut==='Payée'))+'</b></div><div class="tile"><span>En attente</span><b style="font-size:32px">'+eur(sum(d=>d.statut==='En attente'))+'</b></div></div>'+
+  '<div class="box tablewrap"><table class="t"><thead><tr><th>N°</th><th>Client</th><th>Date</th><th>Montant</th><th>Statut</th></tr></thead><tbody>'+
+  state.docs.map(d=>'<tr><td>'+d.n+'</td><td>'+esc(d.client)+'</td><td>'+fmtDate(d.date)+'</td><td>'+eur(d.montant)+'</td><td><span class="tag '+(d.statut==='Payée'?'done':'wait')+'">'+d.statut.toUpperCase()+'</span></td></tr>').join('')+'</tbody></table></div>';
+}
+function bindPro(){
+  const m=$('proMain');
+  m.querySelectorAll('[data-mv]').forEach(b=>b.addEventListener('click',()=>{const [id,s]=b.dataset.mv.split(':');state.appts.find(a=>a.id==id).status=s;save();renderPro()}));
+  m.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{state.appts=state.appts.filter(a=>a.id!=b.dataset.del);save();renderPro()}));
+  m.querySelectorAll('[data-act]').forEach(b=>b.addEventListener('click',()=>{
+    const a=b.dataset.act;
+    if(a==='gotorv'){proPage='rdv';renderPro()}
+    if(a==='newrdv'){location.hash='rdv'}
+    if(a==='newdoc') docModal();
+    if(a==='reset'){const p=state.pro;state=seed();state.pro=p;save();renderPro()}
+  }));
+}
+function docModal(){
+  $('modalRoot').innerHTML='<div class="modal"><div class="box"><h3>Nouveau document</h3><form id="docForm" class="grid2" style="grid-template-columns:1fr">'+
+  '<label class="f">Client<input id="d_client" required></label><label class="f">Montant TTC (€)<input id="d_montant" type="number" min="0" step="0.01" required></label>'+
+  '<label class="f">Type<select id="d_type"><option value="DEV">Devis</option><option value="FAC">Facture</option></select></label>'+
+  '<label class="f">Statut<select id="d_statut"><option>En attente</option><option>Payée</option></select></label>'+
+  '<div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" class="btn ghost" id="d_cancel">Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form></div></div>';
+  $('d_cancel').onclick=()=>$('modalRoot').innerHTML='';
+  $('docForm').onsubmit=e=>{e.preventDefault();state.docs.unshift({n:$('d_type').value+'-'+(1000+state.docs.length+Math.floor(Math.random()*90)),client:$('d_client').value,date:ymd(new Date()),montant:parseFloat($('d_montant').value)||0,statut:$('d_statut').value});save();$('modalRoot').innerHTML='';proPage='devis';renderPro()};
+}
+
+route();
+</script>
+</body>
+</html>
