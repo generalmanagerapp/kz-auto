@@ -135,6 +135,7 @@ input::placeholder{color:#6b6b73}
 .quick button{width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:8px}
 .quick button:hover{border-color:var(--red)}
 .quick small{display:block;color:var(--muted)}
+.plate{display:inline-block;margin:2px 0 6px;padding:2px 8px;border:1.5px solid #2a2a30;border-radius:5px;background:#f4f4f0;color:#111;font:700 12px/1.4 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em}
 .kanban{display:grid;grid-template-columns:repeat(3,minmax(250px,1fr));gap:14px;overflow-x:auto;padding-bottom:6px}
 .col{background:#101012;border:1px solid var(--line);border-radius:14px;padding:12px;min-height:260px}
 .col h3{font-size:19px;display:flex;align-items:center;gap:8px;margin-bottom:12px;font-family:var(--body);font-weight:700}
@@ -260,6 +261,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
           <label class="f">Date disponible<input id="b_date" type="date"></label>
           <label class="f">Email (optionnel)<input id="b_email" type="email" autocomplete="email" placeholder="vous@exemple.fr"></label>
           <label class="f">Modèle du véhicule<input id="b_car" placeholder="Ex : Clio 4"></label>
+          <label class="f">Immatriculation<input id="b_plate" placeholder="AB-123-CD" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12"></label>
 
           <div class="full">
             <div class="slots-head"><strong id="slotTitle">Créneaux disponibles</strong>
@@ -345,10 +347,10 @@ function seed(){
       {n:'DEV-1001',client:'Client exemple A',date:d,montant:450.5,statut:'En attente'},
       {n:'FAC-1002',client:'Client exemple B',date:d,montant:290,statut:'Payée'}],
     appts:[
-    {id:1,name:'Client exemple A',phone:'0612345678',email:'',car:'Peugeot 308',service:'Révision',date:d,time:'09:00',status:'wait'},
-    {id:2,name:'Client exemple B',phone:'0698765432',email:'',car:'Audi A3',service:'Freins et plaquettes',date:d,time:'14:00',status:'wait'},
-    {id:3,name:'Client exemple C',phone:'0611223344',email:'',car:'Renault Clio',service:'Diagnostic moteur',date:ymd(new Date()),time:'08:00',status:'prog'},
-    {id:4,name:'Client exemple D',phone:'0655443322',email:'',car:'Citroën C3',service:'Pneumatiques',date:ymd(new Date()),time:'08:00',status:'done'}
+    {id:1,name:'Client exemple A',phone:'0612345678',email:'',car:'Peugeot 308',plate:'GH-482-KL',service:'Révision',date:d,time:'09:00',status:'wait'},
+    {id:2,name:'Client exemple B',phone:'0698765432',email:'',car:'Audi A3',plate:'FD-917-ZR',service:'Freins et plaquettes',date:d,time:'14:00',status:'wait'},
+    {id:3,name:'Client exemple C',phone:'0611223344',email:'',car:'Renault Clio',plate:'EA-305-MN',service:'Diagnostic moteur',date:ymd(new Date()),time:'08:00',status:'prog'},
+    {id:4,name:'Client exemple D',phone:'0655443322',email:'',car:'Citroën C3',plate:'DC-768-PB',service:'Pneumatiques',date:ymd(new Date()),time:'08:00',status:'done'}
   ]};
 }
 function load(){try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):null}catch(e){return null}}
@@ -427,15 +429,23 @@ function renderSlots(){
   }).join('')+'</div></div>').join('')+'</div>'+(free?'':'<div class="notice">Plus aucun créneau ce jour-là. Essayez un autre jour.</div>');
   box.querySelectorAll('.slot:not([disabled])').forEach(b=>b.addEventListener('click',()=>{chosen={date,time:b.dataset.t};$('formErr').textContent='';renderSlots();updateWa()}));
 }
+function fmtPlate(v){
+  const r=String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const m=r.match(/^([A-Z]{2})(\d{3})([A-Z]{2})$/);
+  return m?m[1]+'-'+m[2]+'-'+m[3]:r;
+}
+function plateOk(v){const r=String(v||'').replace(/[^A-Za-z0-9]/g,'');return /^[A-Za-z]{2}\d{3}[A-Za-z]{2}$/.test(r)||(r.length>=4&&r.length<=10)}
+function carLabel(a){return a.car+(a.plate?' · '+a.plate:'')}
 function updateWa(){
   const f=getForm();
   const msg='Bonjour, je souhaite un rendez-vous au Garage KZ Auto.'+
-    (f.service?'\nService : '+f.service:'')+(f.car?'\nVéhicule : '+f.car:'')+
+    (f.service?'\nService : '+f.service:'')+(f.car?'\nVéhicule : '+f.car:'')+(f.plate?'\nImmatriculation : '+f.plate:'')+
     (chosen?'\nCréneau : '+fmtDate(chosen.date)+' à '+chosen.time.replace(':','h'):'')+(f.name?'\nNom : '+f.name:'');
   $('waBtn').href='https://wa.me/'+GARAGE.wa+'?text='+encodeURIComponent(msg);
 }
-function getForm(){return{name:$('b_name').value.trim(),phone:$('b_phone').value.trim(),email:$('b_email').value.trim(),car:$('b_car').value.trim(),service:$('b_service').value}}
-['b_name','b_phone','b_email','b_car','b_service'].forEach(id=>$(id).addEventListener('input',updateWa));
+function getForm(){return{name:$('b_name').value.trim(),phone:$('b_phone').value.trim(),email:$('b_email').value.trim(),car:$('b_car').value.trim(),plate:fmtPlate($('b_plate').value),service:$('b_service').value}}
+['b_name','b_phone','b_email','b_car','b_plate','b_service'].forEach(id=>$(id).addEventListener('input',updateWa));
+$('b_plate').addEventListener('blur',()=>{$('b_plate').value=fmtPlate($('b_plate').value)});
 $('b_date').addEventListener('change',()=>{chosen=null;renderSlots();updateWa()});
 $('bookForm').addEventListener('submit',e=>{
   e.preventDefault();
@@ -444,11 +454,12 @@ $('bookForm').addEventListener('submit',e=>{
   if(f.phone.replace(/\D/g,'').length<10) return err.textContent='Indiquez un numéro de téléphone à 10 chiffres.';
   if(f.email&&!/^\S+@\S+\.\S+$/.test(f.email)) return err.textContent='Cet email semble incorrect.';
   if(!f.car) return err.textContent='Indiquez le modèle du véhicule.';
+  if(!plateOk(f.plate)) return err.textContent='Indiquez l\'immatriculation du véhicule (ex : AB-123-CD).';
   if(!chosen) return err.textContent='Choisissez un créneau libre.';
   if(isTaken(chosen.date,chosen.time)){chosen=null;renderSlots();return err.textContent='Ce créneau vient d\'être pris. Choisissez-en un autre.'}
   const a={id:state.id++,...f,date:chosen.date,time:chosen.time,status:'wait'};
   state.appts.push(a); save();
-  const msg='Bonjour, c\'est '+f.name+'. Je confirme mon rendez-vous du '+fmtDate(a.date)+' à '+a.time.replace(':','h')+' pour : '+f.service+' ('+f.car+').';
+  const msg='Bonjour, c\'est '+f.name+'. Je confirme mon rendez-vous du '+fmtDate(a.date)+' à '+a.time.replace(':','h')+' pour : '+f.service+' ('+f.car+', '+f.plate+').';
   $('formCard').innerHTML='<div class="success"><h2>Demande envoyée !</h2><p>Votre créneau du <b>'+fmtDate(a.date)+' à '+a.time.replace(':','h')+'</b> est réservé. Il n\'est plus proposé aux autres clients.</p><div class="row"><a class="btn wa-solid" target="_blank" rel="noopener" href="https://wa.me/'+GARAGE.wa+'?text='+encodeURIComponent(msg)+'">Confirmer sur WhatsApp</a><button class="btn ghost" id="again">Nouvelle réservation</button></div></div>';
   $('again').addEventListener('click',()=>location.reload());
 });
@@ -482,7 +493,7 @@ document.querySelectorAll('.side [data-p]').forEach(b=>b.addEventListener('click
 
 function wa(phone,text){let p=phone.replace(/\D/g,'');if(p.startsWith('0'))p='33'+p.slice(1);return 'https://wa.me/'+p+'?text='+encodeURIComponent(text)}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function clients(){const m={};state.appts.forEach(a=>{const k=a.phone.replace(/\D/g,'')||a.name.toLowerCase();(m[k]=m[k]||{name:a.name,phone:a.phone,cars:new Set(),n:0});m[k].cars.add(a.car);m[k].n++});return Object.values(m)}
+function clients(){const m={};state.appts.forEach(a=>{const k=a.phone.replace(/\D/g,'')||a.name.toLowerCase();(m[k]=m[k]||{name:a.name,phone:a.phone,cars:new Set(),n:0});m[k].cars.add(carLabel(a));m[k].n++});return Object.values(m)}
 
 function renderPro(){
   document.querySelectorAll('.side [data-p]').forEach(b=>b.classList.toggle('on',b.dataset.p===proPage));
@@ -502,14 +513,14 @@ function dashHtml(){
   const recent=[...state.appts].sort((a,b)=>b.id-a.id).slice(0,5);
   return '<div class="top"><div><h1>Tableau de bord</h1><p class="lead">Bienvenue dans votre espace de gestion.</p></div><button class="btn" data-act="newrdv">+ Nouveau rendez-vous</button></div>'+
   '<div class="tiles"><div class="tile"><span>RDV en attente</span><b>'+w+'</b></div><div class="tile"><span>Véhicules en atelier</span><b>'+p+'</b></div><div class="tile"><span>Total clients</span><b>'+clients().length+'</b></div></div>'+
-  '<div class="two"><div class="box"><h3>Activité récente</h3>'+(recent.map(a=>'<div class="row-item"><div><b>'+esc(a.name)+'</b> <span style="color:var(--muted)">('+esc(a.car)+')</span><small>'+esc(a.service)+' · '+fmtDate(a.date)+' '+a.time.replace(':','h')+'</small></div><span class="tag '+a.status+'">'+STATUS[a.status].toUpperCase()+'</span></div>').join('')||'<p style="color:var(--muted)">Aucun rendez-vous.</p>')+'</div>'+
+  '<div class="two"><div class="box"><h3>Activité récente</h3>'+(recent.map(a=>'<div class="row-item"><div><b>'+esc(a.name)+'</b> <span style="color:var(--muted)">('+esc(carLabel(a))+')</span><small>'+esc(a.service)+' · '+fmtDate(a.date)+' '+a.time.replace(':','h')+'</small></div><span class="tag '+a.status+'">'+STATUS[a.status].toUpperCase()+'</span></div>').join('')||'<p style="color:var(--muted)">Aucun rendez-vous.</p>')+'</div>'+
   '<div class="box quick"><h3>Actions rapides</h3><button data-act="newdoc">Créer un devis<small>Ajouter un document client</small></button><button data-act="gotorv">Voir les rendez-vous<small>Atelier en temps réel</small></button><button data-act="reset">Remettre les données d\'exemple<small>Réinitialise l\'aperçu</small></button></div></div>';
 }
 function kanbanHtml(){
   const col=(k,color)=>{const items=state.appts.filter(a=>a.status===k).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
     return '<div class="col"><h3><span class="dot" style="background:'+color+'"></span>'+STATUS[k]+'<em>'+items.length+'</em></h3>'+items.map(a=>{
-      const msgs={prog:'Bonjour '+a.name+', c\'est le Garage KZ AUTO. Votre véhicule ('+a.car+') est en cours d\'intervention dans notre atelier.',done:'Bonjour '+a.name+', bonne nouvelle ! Votre véhicule ('+a.car+') est prêt et vous attend au Garage KZ AUTO. Vous pouvez venir le récupérer.',wait:'Bonjour '+a.name+', c\'est le Garage KZ AUTO. Nous confirmons votre rendez-vous du '+fmtDate(a.date)+' à '+a.time.replace(':','h')+'.'};
-      return '<div class="job"><div class="svc">'+esc(a.service)+'</div><h4>'+esc(a.car)+'</h4><div class="meta">'+esc(a.name)+' · '+esc(a.phone)+'</div><div class="foot"><span class="chip">'+fmtDate(a.date)+' · '+a.time.replace(':','h')+'</span><span class="sp"></span>'+
+      const msgs={prog:'Bonjour '+a.name+', c\'est le Garage KZ AUTO. Votre véhicule ('+carLabel(a).replace(' · ',', ')+') est en cours d\'intervention dans notre atelier.',done:'Bonjour '+a.name+', bonne nouvelle ! Votre véhicule ('+carLabel(a).replace(' · ',', ')+') est prêt et vous attend au Garage KZ AUTO. Vous pouvez venir le récupérer.',wait:'Bonjour '+a.name+', c\'est le Garage KZ AUTO. Nous confirmons votre rendez-vous du '+fmtDate(a.date)+' à '+a.time.replace(':','h')+'.'};
+      return '<div class="job"><div class="svc">'+esc(a.service)+'</div><h4>'+esc(a.car)+'</h4>'+(a.plate?'<div class="plate">'+esc(a.plate)+'</div>':'')+'<div class="meta">'+esc(a.name)+' · '+esc(a.phone)+'</div><div class="foot"><span class="chip">'+fmtDate(a.date)+' · '+a.time.replace(':','h')+'</span><span class="sp"></span>'+
       (a.phone?'<a class="mini" target="_blank" rel="noopener" href="'+wa(a.phone,msgs[k])+'">WhatsApp</a>':'')+
       (k==='wait'?'<button class="mini go" data-mv="'+a.id+':prog">Commencer</button>':k==='prog'?'<button class="mini go" data-mv="'+a.id+':done">Terminer</button>':'')+
       '<button class="mini x" data-del="'+a.id+'" title="Supprime le RDV et libère le créneau">Supprimer</button></div></div>'}).join('')+'</div>'};
@@ -588,7 +599,7 @@ function planningHtml(){
   const d=planDate, list=slotsFor(d), closed=isClosedDate(d), dn=DAYS[parse(d).getDay()];
   const rowHtml=(t,a)=>{
     const b=isBlockedSlot(d,t); let left,btns;
-    if(a){ left='<b>'+esc(a.name)+'</b> · '+esc(a.car)+'<small>'+esc(a.service)+(a.phone?' · '+esc(a.phone):'')+'</small>';
+    if(a){ left='<b>'+esc(a.name)+'</b> · '+esc(carLabel(a))+'<small>'+esc(a.service)+(a.phone?' · '+esc(a.phone):'')+'</small>';
       btns='<span class="tag '+a.status+'">'+STATUS[a.status].toUpperCase()+'</span><button class="mini x" data-del="'+a.id+'">Libérer</button>'; }
     else if(b){ left='<b>Créneau bloqué</b><small>Indisponible pour les clients</small>'; btns='<button class="mini" data-unblock="'+t+'">Débloquer</button>'; }
     else { left='<b style="color:var(--ok)">Libre</b>'; btns='<button class="mini go" data-addslot="'+t+'">Ajouter un RDV</button><button class="mini" data-block="'+t+'">Bloquer</button>'; }
@@ -631,6 +642,7 @@ function apptModal(date,time){
   '<label class="f">Nom du client<input id="a_name" autocomplete="off"></label>'+
   '<label class="f">Téléphone<input id="a_phone" type="tel" inputmode="tel"></label>'+
   '<label class="f">Véhicule<input id="a_car" placeholder="Ex : Clio 4"></label>'+
+  '<label class="f">Immatriculation (optionnel)<input id="a_plate" placeholder="AB-123-CD" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12"></label>'+
   '<label class="f">Service<select id="a_service">'+SERVICES.map(s=>'<option>'+s+'</option>').join('')+'</select></label>'+
   '<div class="grid2"><label class="f">Date<input id="a_date" type="date" value="'+d0+'"></label><label class="f">Créneau<select id="a_time"></select></label></div>'+
   '<div class="err" id="a_err" role="alert"></div><div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" class="btn ghost" id="a_cancel">Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form></div></div>';
@@ -642,7 +654,7 @@ function apptModal(date,time){
     const name=$('a_name').value.trim(), dt=$('a_date').value, tm=$('a_time').value, err=$('a_err');
     if(!name) return err.textContent='Indiquez le nom du client.';
     if(!tm||isTaken(dt,tm)) return err.textContent='Choisissez un créneau libre.';
-    state.appts.push({id:state.id++,name,phone:$('a_phone').value.trim(),email:'',car:$('a_car').value.trim()||'Non précisé',service:$('a_service').value,date:dt,time:tm,status:'wait',source:'gérant'});
+    state.appts.push({id:state.id++,name,phone:$('a_phone').value.trim(),email:'',car:$('a_car').value.trim()||'Non précisé',plate:fmtPlate($('a_plate').value),service:$('a_service').value,date:dt,time:tm,status:'wait',source:'gérant'});
     save(); $('modalRoot').innerHTML=''; if(proPage==='planning') planDate=dt; renderPro();
   };
 }
