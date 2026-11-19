@@ -160,6 +160,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
 .login .ico{margin:0 auto}
 .login form{display:flex;flex-direction:column;gap:14px;text-align:left;margin-top:20px}
 .demo-note{font-size:12px;color:var(--muted);margin-top:14px}
+.hh{width:118px;padding:8px 10px}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:grid;place-items:center;z-index:50;padding:16px}
 .modal .box{width:100%;max-width:440px}
 </style>
@@ -283,12 +284,8 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
       <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></div>
       <h1>KZ AUTO PRO</h1>
       <p style="color:var(--muted);margin:0">Système de gestion réservé au personnel</p>
-      <form id="loginForm">
-        <label class="f">Identifiant<input id="l_user" value="admin" autocomplete="username"></label>
-        <label class="f">Mot de passe<input id="l_pass" type="password" value="demo1234" autocomplete="current-password"></label>
-        <button class="btn" type="submit">Accéder au dashboard</button>
-      </form>
-      <p class="demo-note">Aperçu : n'importe quel identifiant fonctionne. La vraie version aura un mot de passe.</p>
+      <form id="loginForm"></form>
+      <p class="demo-note" id="loginNote"></p>
     </div>
   </div>
 </main>
@@ -298,8 +295,11 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
   <aside class="side">
     <button data-p="dash" class="on">Vue d'ensemble</button>
     <button data-p="rdv">Rendez-vous <span class="pill" id="pillWait">0</span></button>
+    <button data-p="planning">Planning</button>
     <button data-p="clients">Clients et autos</button>
     <button data-p="devis">Devis et factures</button>
+    <button data-p="horaires">Horaires</button>
+    <button data-p="params">Paramètres</button>
     <div class="sp"></div>
     <button id="logoutBtn">Déconnexion</button>
   </aside>
@@ -311,19 +311,29 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
 <script>
 /* ============ Configuration du garage ============ */
 const GARAGE = { nom:'Garage KZ Auto', tel:'07 66 76 90 91', wa:'33766769091', adresse:'65 rue Rouget de Lisle, 42000 Saint-Étienne' };
-const SLOT_MIN = 60; // durée d'un créneau en minutes
-// Jours : 0 = dimanche … 6 = samedi. Plages [début, fin] en heures.
-const HOURS = {
+const DEFAULT_SLOT_MIN = 60; // durée d'un créneau en minutes
+// Jours : 0 = dimanche … 6 = samedi. Plages [début, fin] en heures (8.5 = 8h30). Modifiables dans l'espace pro, onglet Horaires.
+const DEFAULT_HOURS = {
   0:[],
   1:[[8,12],[14,18]], 2:[[8,12],[14,18]], 3:[[8,12],[14,18]], 4:[[8,12],[14,18]], 5:[[8,12],[14,18]],
   6:[[9,16]]
 };
+let SLOT_MIN = DEFAULT_SLOT_MIN;
+let HOURS = DEFAULT_HOURS;
+const SERVICES = ['Révision','Vidange','Diagnostic moteur','Freins et plaquettes','Pneumatiques','Climatisation','Autre'];
 const DAYS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
 const STATUS = { wait:'À prendre en charge', prog:'En cours (atelier)', done:'Terminé (prêt)' };
 
 /* ============ État ============ */
 const KEY='kz-auto-preview-v1';
 let state = load() || seed();
+function ensureSettings(){
+  const s=state.settings=state.settings||{};
+  s.hours=s.hours||JSON.parse(JSON.stringify(DEFAULT_HOURS));
+  s.slot=s.slot||DEFAULT_SLOT_MIN; s.closed=s.closed||[]; s.blocked=s.blocked||[]; s.pwHash=s.pwHash||null;
+  HOURS=s.hours; SLOT_MIN=s.slot;
+}
+ensureSettings();
 function pad(n){return String(n).padStart(2,'0')}
 function ymd(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
 function parse(s){const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
@@ -345,14 +355,21 @@ function load(){try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):nul
 function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
 
 /* ============ Créneaux ============ */
+function isClosedDate(date){return (state.settings.closed||[]).some(c=>c.date===date)}
+function closedLabel(date){const c=(state.settings.closed||[]).find(c=>c.date===date);return c?c.label||'':''}
+function isBlockedSlot(date,time){return (state.settings.blocked||[]).some(b=>b.date===date&&b.time===time)}
 function slotsFor(dateStr){
   const d=parse(dateStr), out=[];
-  for(const [a,b] of HOURS[d.getDay()]){
-    for(let m=a*60;m+SLOT_MIN<=b*60;m+=SLOT_MIN) out.push(pad(Math.floor(m/60))+':'+pad(m%60));
+  if(isClosedDate(dateStr)) return out;
+  for(const [a,b] of (HOURS[d.getDay()]||[])){
+    for(let m=Math.round(a*60);m+SLOT_MIN<=Math.round(b*60);m+=SLOT_MIN) out.push(pad(Math.floor(m/60))+':'+pad(m%60));
   }
   return out;
 }
-function isTaken(date,time){return state.appts.some(a=>a.date===date&&a.time===time)}
+function isTaken(date,time){return state.appts.some(a=>a.date===date&&a.time===time)||isBlockedSlot(date,time)}
+function nextOpenAvailable(from){const d=new Date(from);for(let i=0;i<90;i++){const s=ymd(d);if(freeCount(s)>0)return s;d.setDate(d.getDate()+1)}return ymd(from)}
+function hhmm(x){if(x===''||x==null)return '';const m=Math.round(x*60);return pad(Math.floor(m/60))+':'+pad(m%60)}
+function phm(s){if(!s)return null;const [h,m]=s.split(':').map(Number);return h+m/60}
 function isPast(date,time){const [h,m]=time.split(':').map(Number);const d=parse(date);d.setHours(h,m);return d<=new Date()}
 function freeCount(date){return slotsFor(date).filter(t=>!isTaken(date,t)&&!isPast(date,t)).length}
 
@@ -365,7 +382,7 @@ let proPage='dash';
 function route(){
   const h=location.hash.replace('#','');
   if(h==='rdv'){show('rdv');initBooking();window.scrollTo(0,0);return}
-  if(h==='pro'){ if(state.pro){show('pro');renderPro()} else {show('login')} window.scrollTo(0,0);return}
+  if(h==='pro'){ if(state.pro){show('pro');renderPro()} else {show('login');renderLogin()} window.scrollTo(0,0);return}
   show('home');
   const el=h&&document.getElementById(h); if(el) el.scrollIntoView(); else window.scrollTo(0,0);
 }
@@ -373,21 +390,23 @@ window.addEventListener('hashchange',route);
 document.querySelectorAll('[data-go="home"]').forEach(a=>a.addEventListener('click',()=>{ if(!location.hash||location.hash==='#'+a.getAttribute('href').slice(1)) setTimeout(route,0)}));
 
 /* ============ Horaires (accueil) ============ */
-(function(){
+function fh(x){const h=Math.floor(x+1e-9), m=Math.round((x-h)*60);return h+'h'+(m?pad(m):'')}
+function renderHours(){
   const t=document.getElementById('hoursTable'), today=new Date().getDay();
   const order=[1,2,3,4,5,6,0];
   t.innerHTML=order.map(i=>{
-    const r=HOURS[i].map(([a,b])=>a+'h – '+b+'h').join(' · ')||'Fermé';
+    const r=(HOURS[i]||[]).map(([a,b])=>fh(a)+' – '+fh(b)).join(' · ')||'Fermé';
     return '<tr class="'+(i===today?'today':'')+'"><td>'+DAYS[i]+'</td><td>'+r+'</td></tr>';
   }).join('');
-})();
+}
+renderHours();
 
 /* ============ Réservation ============ */
 let chosen=null;
 const $=id=>document.getElementById(id);
 function initBooking(){
   if(!$('bookForm')) return;
-  const today=new Date(), first=ymd(nextOpen(today));
+  const today=new Date(), first=nextOpenAvailable(today);
   $('b_date').min=ymd(today);
   if(!$('b_date').value||$('b_date').value<ymd(today)) $('b_date').value=first;
   renderSlots(); updateWa();
@@ -398,13 +417,13 @@ function renderSlots(){
   const list=slotsFor(date);
   const dname=DAYS[parse(date).getDay()];
   if(!list.length){ $('slotTitle').textContent='Créneaux disponibles';
-    box.innerHTML='<div class="notice">Le garage est fermé le '+dname.toLowerCase()+'. Choisissez un autre jour.</div>'; return }
+    box.innerHTML='<div class="notice">'+(isClosedDate(date)?'Le garage est fermé ce jour-là'+(closedLabel(date)?' ('+esc(closedLabel(date))+')':'')+'.':'Le garage est fermé le '+dname.toLowerCase()+'.')+' Choisissez un autre jour.</div>'; return }
   const free=freeCount(date);
   $('slotTitle').textContent=dname+' '+fmtDate(date).slice(4)+' · '+(free?free+' créneau'+(free>1?'x':'')+' libre'+(free>1?'s':''):'complet');
   const groups=[['Matin',list.filter(t=>+t.slice(0,2)<12)],['Après-midi',list.filter(t=>+t.slice(0,2)>=12)]].filter(g=>g[1].length);
   box.innerHTML='<div class="slot-groups">'+groups.map(([lbl,arr])=>'<div><div class="lbl">'+lbl+'</div><div class="slots">'+arr.map(t=>{
     const taken=isTaken(date,t), past=isPast(date,t), dis=taken||past;
-    return '<button type="button" class="slot'+(chosen&&chosen.time===t?' sel':'')+'" data-t="'+t+'"'+(dis?' disabled':'')+'>'+t.replace(':','h')+(dis?'<small>'+(taken?'PRIS':'PASSÉ')+'</small>':'')+'</button>';
+    return '<button type="button" class="slot'+(chosen&&chosen.time===t?' sel':'')+'" data-t="'+t+'"'+(dis?' disabled':'')+'>'+t.replace(':','h')+(dis?'<small>'+(taken?(isBlockedSlot(date,t)?'INDISPO':'PRIS'):'PASSÉ')+'</small>':'')+'</button>';
   }).join('')+'</div></div>').join('')+'</div>'+(free?'':'<div class="notice">Plus aucun créneau ce jour-là. Essayez un autre jour.</div>');
   box.querySelectorAll('.slot:not([disabled])').forEach(b=>b.addEventListener('click',()=>{chosen={date,time:b.dataset.t};$('formErr').textContent='';renderSlots();updateWa()}));
 }
@@ -435,13 +454,35 @@ $('bookForm').addEventListener('submit',e=>{
 });
 
 /* ============ Espace pro ============ */
-$('loginForm').addEventListener('submit',e=>{e.preventDefault();state.pro=true;save();location.hash='pro';route()});
+async function sha(s){
+  if(!(window.crypto&&crypto.subtle)) return 'x:'+btoa(unescape(encodeURIComponent(s)));
+  const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('kz|'+s));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+function renderLogin(){
+  const first=!state.settings.pwHash;
+  $('loginForm').innerHTML=(first?'<p style="margin:0;color:var(--muted);font-size:14px">Première connexion : choisissez le mot de passe du gérant (6 caractères minimum).</p>':'')+
+    '<label class="f">'+(first?'Nouveau mot de passe':'Mot de passe')+'<input id="l_pass" type="password" autocomplete="'+(first?'new-password':'current-password')+'"></label>'+
+    (first?'<label class="f">Confirmer<input id="l_pass2" type="password" autocomplete="new-password"></label>':'')+
+    '<div class="err" id="loginErr" role="alert"></div><button class="btn" type="submit">'+(first?'Créer et entrer':'Accéder au dashboard')+'</button>';
+  $('loginNote').textContent='Aperçu : le mot de passe est enregistré dans ce navigateur uniquement. La version finale aura une vraie connexion sécurisée.';
+}
+$('loginForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const err=$('loginErr'), p=$('l_pass').value, first=!state.settings.pwHash;
+  if(first){
+    if(p.length<6) return err.textContent='Le mot de passe doit faire au moins 6 caractères.';
+    if(p!==$('l_pass2').value) return err.textContent='Les deux mots de passe sont différents.';
+    state.settings.pwHash=await sha(p);
+  } else if(await sha(p)!==state.settings.pwHash){ return err.textContent='Mot de passe incorrect.' }
+  state.pro=true;save();location.hash='pro';route();
+});
 $('logoutBtn').addEventListener('click',()=>{state.pro=false;save();location.hash='pro';route()});
 document.querySelectorAll('.side [data-p]').forEach(b=>b.addEventListener('click',()=>{proPage=b.dataset.p;renderPro()}));
 
 function wa(phone,text){let p=phone.replace(/\D/g,'');if(p.startsWith('0'))p='33'+p.slice(1);return 'https://wa.me/'+p+'?text='+encodeURIComponent(text)}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function clients(){const m={};state.appts.forEach(a=>{const k=a.phone.replace(/\D/g,'');(m[k]=m[k]||{name:a.name,phone:a.phone,cars:new Set(),n:0});m[k].cars.add(a.car);m[k].n++});return Object.values(m)}
+function clients(){const m={};state.appts.forEach(a=>{const k=a.phone.replace(/\D/g,'')||a.name.toLowerCase();(m[k]=m[k]||{name:a.name,phone:a.phone,cars:new Set(),n:0});m[k].cars.add(a.car);m[k].n++});return Object.values(m)}
 
 function renderPro(){
   document.querySelectorAll('.side [data-p]').forEach(b=>b.classList.toggle('on',b.dataset.p===proPage));
@@ -451,6 +492,9 @@ function renderPro(){
   if(proPage==='rdv') m.innerHTML=kanbanHtml();
   if(proPage==='clients') m.innerHTML=clientsHtml();
   if(proPage==='devis') m.innerHTML=devisHtml();
+  if(proPage==='planning') m.innerHTML=planningHtml();
+  if(proPage==='horaires') m.innerHTML=horairesHtml();
+  if(proPage==='params') m.innerHTML=paramsHtml();
   bindPro();
 }
 function dashHtml(){
@@ -466,7 +510,7 @@ function kanbanHtml(){
     return '<div class="col"><h3><span class="dot" style="background:'+color+'"></span>'+STATUS[k]+'<em>'+items.length+'</em></h3>'+items.map(a=>{
       const msgs={prog:'Bonjour '+a.name+', c\'est le Garage KZ AUTO. Votre véhicule ('+a.car+') est en cours d\'intervention dans notre atelier.',done:'Bonjour '+a.name+', bonne nouvelle ! Votre véhicule ('+a.car+') est prêt et vous attend au Garage KZ AUTO. Vous pouvez venir le récupérer.',wait:'Bonjour '+a.name+', c\'est le Garage KZ AUTO. Nous confirmons votre rendez-vous du '+fmtDate(a.date)+' à '+a.time.replace(':','h')+'.'};
       return '<div class="job"><div class="svc">'+esc(a.service)+'</div><h4>'+esc(a.car)+'</h4><div class="meta">'+esc(a.name)+' · '+esc(a.phone)+'</div><div class="foot"><span class="chip">'+fmtDate(a.date)+' · '+a.time.replace(':','h')+'</span><span class="sp"></span>'+
-      '<a class="mini" target="_blank" rel="noopener" href="'+wa(a.phone,msgs[k])+'">WhatsApp</a>'+
+      (a.phone?'<a class="mini" target="_blank" rel="noopener" href="'+wa(a.phone,msgs[k])+'">WhatsApp</a>':'')+
       (k==='wait'?'<button class="mini go" data-mv="'+a.id+':prog">Commencer</button>':k==='prog'?'<button class="mini go" data-mv="'+a.id+':done">Terminer</button>':'')+
       '<button class="mini x" data-del="'+a.id+'" title="Supprime le RDV et libère le créneau">Supprimer</button></div></div>'}).join('')+'</div>'};
   return '<div class="top"><div><h1>Rendez-vous et atelier</h1><p class="lead">Gérez le flux des réparations. Supprimer un RDV libère son créneau.</p></div><button class="btn" data-act="newrdv">+ Nouveau</button></div><div class="kanban">'+col('wait','var(--warn)')+col('prog','var(--info)')+col('done','var(--ok)')+'</div>';
@@ -485,15 +529,122 @@ function devisHtml(){
 }
 function bindPro(){
   const m=$('proMain');
+  const pd=$('pl_date'); if(pd) pd.addEventListener('change',()=>{planDate=pd.value||planDate;renderPro()});
+  m.querySelectorAll('[data-pl]').forEach(b=>b.addEventListener('click',()=>{const d=parse(planDate);d.setDate(d.getDate()+(+b.dataset.pl));planDate=ymd(d);renderPro()}));
+  m.querySelectorAll('[data-addslot]').forEach(b=>b.addEventListener('click',()=>apptModal(planDate,b.dataset.addslot)));
+  m.querySelectorAll('[data-block]').forEach(b=>b.addEventListener('click',()=>{state.settings.blocked.push({date:planDate,time:b.dataset.block});save();renderPro()}));
+  m.querySelectorAll('[data-unblock]').forEach(b=>b.addEventListener('click',()=>{state.settings.blocked=state.settings.blocked.filter(x=>!(x.date===planDate&&x.time===b.dataset.unblock));save();renderPro()}));
+  m.querySelectorAll('[data-dayclose]').forEach(b=>b.addEventListener('click',()=>{if(!isClosedDate(b.dataset.dayclose))state.settings.closed.push({date:b.dataset.dayclose,label:''});save();renderPro()}));
+  m.querySelectorAll('[data-dayopen]').forEach(b=>b.addEventListener('click',()=>{state.settings.closed=state.settings.closed.filter(c=>c.date!==b.dataset.dayopen);save();renderPro()}));
+  m.querySelectorAll('[data-delclosed]').forEach(b=>b.addEventListener('click',()=>{state.settings.closed=state.settings.closed.filter(c=>c.date!==b.dataset.delclosed);save();renderPro()}));
   m.querySelectorAll('[data-mv]').forEach(b=>b.addEventListener('click',()=>{const [id,s]=b.dataset.mv.split(':');state.appts.find(a=>a.id==id).status=s;save();renderPro()}));
   m.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{state.appts=state.appts.filter(a=>a.id!=b.dataset.del);save();renderPro()}));
   m.querySelectorAll('[data-act]').forEach(b=>b.addEventListener('click',()=>{
     const a=b.dataset.act;
     if(a==='gotorv'){proPage='rdv';renderPro()}
-    if(a==='newrdv'){location.hash='rdv'}
+    if(a==='newrdv') apptModal(proPage==='planning'?planDate:null);
+    if(a==='savehours'){
+      const hours={}, err=$('h_err'); err.style.color='';
+      for(const i of [0,1,2,3,4,5,6]){
+        const pl=[];
+        for(const p of [0,1]){
+          const s0=phm($('h'+i+'_'+p+'0').value), s1=phm($('h'+i+'_'+p+'1').value);
+          if(s0==null&&s1==null) continue;
+          if(s0==null||s1==null||s1<=s0){err.textContent=DAYS[i]+' : indiquez une heure de début et une heure de fin cohérentes.';return}
+          pl.push([s0,s1]);
+        }
+        if(pl.length===2&&pl[1][0]<pl[0][1]){err.textContent=DAYS[i]+' : la plage 2 doit commencer après la plage 1.';return}
+        hours[i]=pl;
+      }
+      if(![0,1,2,3,4,5,6].some(i=>hours[i].length)){err.textContent='Ouvrez au moins un jour.';return}
+      const slot=+$('h_slot').value;
+      state.settings.hours=hours; state.settings.slot=slot; HOURS=hours; SLOT_MIN=slot; save(); renderHours(); planDate=null;
+      const today=ymd(new Date()), orph=state.appts.filter(x=>x.date>=today&&!slotsFor(x.date).includes(x.time)).length;
+      err.style.color='var(--ok)';
+      err.textContent='Horaires enregistrés.'+(orph?' '+orph+' RDV existant'+(orph>1?'s sont':' est')+' hors des nouveaux créneaux : '+(orph>1?'ils restent':'il reste')+' visible'+(orph>1?'s':'')+' dans Planning.':'');
+    }
+    if(a==='addclosed'){
+      const d=$('c_date').value, label=$('c_label').value.trim(); if(!d) return;
+      if(!isClosedDate(d)) state.settings.closed.push({date:d,label});
+      save();
+      const n=state.appts.filter(x=>x.date===d).length; renderPro();
+      if(n){const e=$('c_msg'); if(e) e.textContent='Attention : '+n+' RDV existe'+(n>1?'nt':'')+' déjà ce jour-là. Pensez à prévenir les clients.'}
+    }
+    if(a==='savepw'){(async()=>{
+      const err=$('p_err'), cur=$('p_cur')?$('p_cur').value:'', n1=$('p_new').value, n2=$('p_new2').value; err.style.color='';
+      if(state.settings.pwHash && await sha(cur)!==state.settings.pwHash) return err.textContent='Mot de passe actuel incorrect.';
+      if(n1.length<6) return err.textContent='Le nouveau mot de passe doit faire au moins 6 caractères.';
+      if(n1!==n2) return err.textContent='Les deux mots de passe sont différents.';
+      state.settings.pwHash=await sha(n1); save(); err.style.color='var(--ok)'; err.textContent='Mot de passe modifié.';
+      $('p_new').value=''; $('p_new2').value=''; if($('p_cur')) $('p_cur').value='';
+    })()}
     if(a==='newdoc') docModal();
-    if(a==='reset'){const p=state.pro;state=seed();state.pro=p;save();renderPro()}
+    if(a==='reset'){const p=state.pro, s=state.settings;state=seed();state.pro=p;state.settings=s;ensureSettings();save();renderPro()}
   }));
+}
+let planDate=null;
+function planningHtml(){
+  if(!planDate) planDate=nextOpenAvailable(new Date());
+  const d=planDate, list=slotsFor(d), closed=isClosedDate(d), dn=DAYS[parse(d).getDay()];
+  const rowHtml=(t,a)=>{
+    const b=isBlockedSlot(d,t); let left,btns;
+    if(a){ left='<b>'+esc(a.name)+'</b> · '+esc(a.car)+'<small>'+esc(a.service)+(a.phone?' · '+esc(a.phone):'')+'</small>';
+      btns='<span class="tag '+a.status+'">'+STATUS[a.status].toUpperCase()+'</span><button class="mini x" data-del="'+a.id+'">Libérer</button>'; }
+    else if(b){ left='<b>Créneau bloqué</b><small>Indisponible pour les clients</small>'; btns='<button class="mini" data-unblock="'+t+'">Débloquer</button>'; }
+    else { left='<b style="color:var(--ok)">Libre</b>'; btns='<button class="mini go" data-addslot="'+t+'">Ajouter un RDV</button><button class="mini" data-block="'+t+'">Bloquer</button>'; }
+    return '<div class="row-item" style="flex-wrap:wrap"><div style="min-width:64px;font-variant-numeric:tabular-nums;font-weight:700;font-size:18px">'+t.replace(':','h')+'</div><div style="flex:1;min-width:140px">'+left+'</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+btns+'</div></div>';
+  };
+  let body;
+  if(closed) body='<div class="notice">Journée fermée'+(closedLabel(d)?' : '+esc(closedLabel(d)):'')+'. Aucun créneau n\'est proposé aux clients.</div>';
+  else if(!list.length) body='<div class="notice">Le garage est fermé le '+dn.toLowerCase()+' (voir l\'onglet Horaires).</div>';
+  else body=list.map(t=>rowHtml(t,state.appts.find(x=>x.date===d&&x.time===t))).join('');
+  const orph=state.appts.filter(x=>x.date===d&&!list.includes(x.time)).sort((a,b)=>a.time.localeCompare(b.time));
+  const orphHtml=orph.length?'<h3 style="margin:18px 0 10px;font-size:18px">Autres rendez-vous ce jour</h3><p class="lead" style="margin:0 0 10px;font-size:14px">Hors des créneaux actuels (horaires modifiés ou journée fermée).</p>'+orph.map(a=>rowHtml(a.time,a)).join(''):'';
+  const free=list.filter(t=>!isTaken(d,t)).length;
+  return '<h1>Planning</h1><p class="lead">Tous les créneaux du garage. Un RDV pris ou un créneau bloqué n\'est plus proposé aux clients.</p>'+
+  '<div class="box"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px"><button class="mini" data-pl="-1" aria-label="Jour précédent">‹</button><input id="pl_date" type="date" value="'+d+'" style="max-width:180px"><button class="mini" data-pl="1" aria-label="Jour suivant">›</button><b>'+dn+'</b>'+(list.length?'<span style="color:var(--muted)">'+free+' libre'+(free>1?'s':'')+' sur '+list.length+'</span>':'')+'<span style="flex:1"></span>'+
+  (closed?'<button class="mini" data-dayopen="'+d+'">Rouvrir cette journée</button>':list.length?'<button class="mini x" data-dayclose="'+d+'">Fermer cette journée</button>':'')+'</div>'+body+orphHtml+'</div>';
+}
+function horairesHtml(){
+  const s=state.settings, today=ymd(new Date());
+  const row=i=>{const h=s.hours[i]||[];const c=(p,k)=>'<input class="hh" type="time" id="h'+i+'_'+p+k+'" value="'+hhmm(h[p]?h[p][k]:'')+'">';
+    return '<tr><td>'+DAYS[i]+'</td><td>'+c(0,0)+' – '+c(0,1)+'</td><td>'+c(1,0)+' – '+c(1,1)+'</td></tr>'};
+  const fut=[...s.closed].filter(c=>c.date>=today).sort((a,b)=>a.date.localeCompare(b.date));
+  return '<h1>Horaires</h1><p class="lead">Ces horaires décident des créneaux proposés aux clients. Laissez les deux plages vides pour un jour fermé.</p>'+
+  '<div class="box tablewrap"><table class="t"><thead><tr><th>Jour</th><th>Plage 1</th><th>Plage 2</th></tr></thead><tbody>'+[1,2,3,4,5,6,0].map(row).join('')+'</tbody></table>'+
+  '<div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-top:16px"><label class="f" style="max-width:220px">Durée d\'un créneau<select id="h_slot">'+[30,45,60,90,120].map(n=>'<option value="'+n+'"'+(n===s.slot?' selected':'')+'>'+n+' min</option>').join('')+'</select></label><button class="btn" data-act="savehours">Enregistrer les horaires</button></div><div class="err" id="h_err" role="alert"></div></div>'+
+  '<div class="box" style="margin-top:16px"><h3>Jours de fermeture</h3><p class="lead" style="margin:0 0 12px">Congés, jours fériés : plus aucun créneau n\'est proposé ces jours-là.</p>'+
+  '<div class="grid2" style="margin-bottom:12px"><label class="f">Date<input id="c_date" type="date" min="'+today+'"></label><label class="f">Motif (optionnel)<input id="c_label" placeholder="Ex : congés d\'été"></label></div><button class="btn sm" data-act="addclosed">Ajouter</button><div class="err" id="c_msg" style="color:var(--warn)"></div>'+
+  '<div style="margin-top:10px">'+(fut.map(c=>'<div class="row-item"><div><b>'+fmtDate(c.date)+'</b>'+(c.label?'<small>'+esc(c.label)+'</small>':'')+'</div><button class="mini x" data-delclosed="'+c.date+'">Retirer</button></div>').join('')||'<p style="color:var(--muted);margin:0">Aucun jour de fermeture à venir.</p>')+'</div></div>';
+}
+function paramsHtml(){
+  const has=!!state.settings.pwHash;
+  return '<h1>Paramètres</h1><p class="lead">Accès gérant et données de l\'aperçu.</p>'+
+  '<div class="box" style="max-width:480px"><h3>Mot de passe du gérant</h3><div style="display:flex;flex-direction:column;gap:12px">'+
+  (has?'<label class="f">Mot de passe actuel<input id="p_cur" type="password" autocomplete="current-password"></label>':'')+
+  '<label class="f">Nouveau mot de passe<input id="p_new" type="password" autocomplete="new-password"></label><label class="f">Confirmer<input id="p_new2" type="password" autocomplete="new-password"></label><div class="err" id="p_err" role="alert"></div><button class="btn" data-act="savepw">Changer le mot de passe</button></div></div>'+
+  '<div class="box" style="max-width:480px;margin-top:16px"><h3>Données de l\'aperçu</h3><p class="lead" style="margin:0 0 12px">Les rendez-vous sont enregistrés dans ce navigateur uniquement. Pour qu\'ils soient partagés entre le gérant et les clients, il faudra brancher une base de données.</p><button class="btn ghost" data-act="reset">Remettre les rendez-vous d\'exemple</button></div>';
+}
+function apptModal(date,time){
+  const d0=date||nextOpenAvailable(new Date());
+  $('modalRoot').innerHTML='<div class="modal"><div class="box"><h3>Nouveau rendez-vous</h3><form id="apForm" style="display:flex;flex-direction:column;gap:12px">'+
+  '<label class="f">Nom du client<input id="a_name" autocomplete="off"></label>'+
+  '<label class="f">Téléphone<input id="a_phone" type="tel" inputmode="tel"></label>'+
+  '<label class="f">Véhicule<input id="a_car" placeholder="Ex : Clio 4"></label>'+
+  '<label class="f">Service<select id="a_service">'+SERVICES.map(s=>'<option>'+s+'</option>').join('')+'</select></label>'+
+  '<div class="grid2"><label class="f">Date<input id="a_date" type="date" value="'+d0+'"></label><label class="f">Créneau<select id="a_time"></select></label></div>'+
+  '<div class="err" id="a_err" role="alert"></div><div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" class="btn ghost" id="a_cancel">Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form></div></div>';
+  const fill=sel=>{const dt=$('a_date').value;const free=slotsFor(dt).filter(t=>!isTaken(dt,t)&&!isPast(dt,t));
+    $('a_time').innerHTML=free.length?free.map(t=>'<option value="'+t+'"'+(t===sel?' selected':'')+'>'+t.replace(':','h')+'</option>').join(''):'<option value="">Aucun créneau libre</option>'};
+  fill(time); $('a_date').addEventListener('change',()=>fill());
+  $('a_cancel').onclick=()=>$('modalRoot').innerHTML='';
+  $('apForm').onsubmit=e=>{e.preventDefault();
+    const name=$('a_name').value.trim(), dt=$('a_date').value, tm=$('a_time').value, err=$('a_err');
+    if(!name) return err.textContent='Indiquez le nom du client.';
+    if(!tm||isTaken(dt,tm)) return err.textContent='Choisissez un créneau libre.';
+    state.appts.push({id:state.id++,name,phone:$('a_phone').value.trim(),email:'',car:$('a_car').value.trim()||'Non précisé',service:$('a_service').value,date:dt,time:tm,status:'wait',source:'gérant'});
+    save(); $('modalRoot').innerHTML=''; if(proPage==='planning') planDate=dt; renderPro();
+  };
 }
 function docModal(){
   $('modalRoot').innerHTML='<div class="modal"><div class="box"><h3>Nouveau document</h3><form id="docForm" class="grid2" style="grid-template-columns:1fr">'+
