@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Garage KZ Auto</title>
+<title>Garage KZ Autos</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
@@ -170,7 +170,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
 
 <header class="nav">
   <div class="wrap">
-    <a class="brand" href="#top" data-go="home"><i>KZ</i><span><b>KZ</b> AUTO</span></a>
+    <a class="brand" href="#top" data-go="home"><i>KZ</i><span><b>KZ</b> AUTOS</span></a>
     <nav class="nav-links" id="publicNav">
       <a class="hide-s" href="#top" data-go="home">Accueil</a>
       <a class="hide-s" href="#expertise" data-go="home">Expertise</a>
@@ -188,7 +188,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
 <main id="v-home">
   <section class="hero" id="top">
     <div class="wrap">
-      <h1>GARAGE <b>KZ AUTO</b></h1>
+      <h1>GARAGE <b>KZ AUTOS</b></h1>
       <p>Mécanique, entretien et diagnostic toute marque, au cœur de Saint-Étienne. Réservez un créneau libre en ligne en 30 secondes.</p>
       <div class="cta">
         <a class="btn" href="#rdv">Prendre rendez-vous</a>
@@ -250,7 +250,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
       </div>
     </div>
   </section>
-  <footer>© Garage KZ Auto, Saint-Étienne · <a href="#pro" style="text-decoration:underline">Espace pro</a></footer>
+  <footer>© Garage KZ Autos, Saint-Étienne · <a href="#pro" style="text-decoration:underline">Espace pro</a></footer>
 </main>
 
 <!-- PRISE DE RDV -->
@@ -290,7 +290,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
   <div class="wrap">
     <div class="login">
       <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></div>
-      <h1>KZ AUTO PRO</h1>
+      <h1>KZ AUTOS PRO</h1>
       <p style="color:var(--muted);margin:0">Système de gestion réservé au personnel</p>
       <form id="loginForm"></form>
       <p class="demo-note" id="loginNote"></p>
@@ -319,7 +319,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
 
 <script>
 /* ============ Configuration du garage ============ */
-const GARAGE = { nom:'Garage KZ Auto', tel:'07 66 76 90 91', wa:'33766769091', adresse:'65 rue Rouget de Lisle, 42000 Saint-Étienne' };
+const GARAGE = { nom:'Garage KZ Autos', tel:'07 66 76 90 91', wa:'33766769091', adresse:'65 rue Rouget de Lisle, 42000 Saint-Étienne' };
 const DEFAULT_SLOT_MIN = 60; // durée d'un créneau en minutes
 // Jours : 0 = dimanche … 6 = samedi. Plages [début, fin] en heures (8.5 = 8h30). Modifiables dans l'espace pro, onglet Horaires.
 const DEFAULT_HOURS = {
@@ -455,7 +455,7 @@ function plateOk(v){const r=String(v||'').replace(/[^A-Za-z0-9]/g,'');return /^[
 function carLabel(a){return a.car+(a.plate?' · '+a.plate:'')}
 function updateWa(){
   const f=getForm();
-  const msg='Bonjour, je souhaite un rendez-vous au Garage KZ Auto.'+
+  const msg='Bonjour, je souhaite un rendez-vous au Garage KZ Autos.'+
     (f.service?'\nService : '+f.service:'')+(f.car?'\nVéhicule : '+f.car:'')+(f.plate?'\nImmatriculation : '+f.plate:'')+
     (chosen?'\nCréneau : '+fmtDate(chosen.date)+' à '+chosen.time.replace(':','h'):'')+(f.name?'\nNom : '+f.name:'');
   $('waBtn').href='https://wa.me/'+GARAGE.wa+'?text='+encodeURIComponent(msg);
@@ -539,7 +539,7 @@ function dashHtml(){
 function kanbanHtml(){
   const col=(k,color)=>{const items=state.appts.filter(a=>a.status===k).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
     return '<div class="col"><h3><span class="dot" style="background:'+color+'"></span>'+STATUS[k]+'<em>'+items.length+'</em></h3>'+items.map(a=>{
-      const msgs={prog:'Bonjour '+a.name+', c\'est le Garage KZ AUTO. Votre véhicule ('+carLabel(a).replace(' · ',', ')+') est en cours d\'intervention dans notre atelier.',done:'Bonjour '+a.name+', bonne nouvelle ! Votre véhicule ('+carLabel(a).replace(' · ',', ')+') est prêt et vous attend au Garage KZ AUTO. Vous pouvez venir le récupérer.',wait:'Bonjour '+a.name+', c\'est le Garage KZ AUTO. Nous confirmons votre rendez-vous du '+fmtDate(a.date)+' à '+a.time.replace(':','h')+'.'};
+      const msgs={prog:'Bonjour '+a.name+', c\'est le Garage KZ AUTOS. Votre véhicule ('+carLabel(a).replace(' · ',', ')+') est en cours d\'intervention dans notre atelier.',done:'Bonjour '+a.name+', bonne nouvelle ! Votre véhicule ('+carLabel(a).replace(' · ',', ')+') est prêt et vous attend au Garage KZ AUTOS. Vous pouvez venir le récupérer.',wait:'Bonjour '+a.name+', c\'est le Garage KZ AUTOS. Nous confirmons votre rendez-vous du '+fmtDate(a.date)+' à '+a.time.replace(':','h')+'.'};
       return '<div class="job"><div class="svc">'+esc(a.service)+'</div><h4>'+esc(a.car)+'</h4>'+(a.plate?'<div class="plate">'+esc(a.plate)+'</div>':'')+'<div class="meta">'+esc(a.name)+' · '+esc(a.phone)+'</div><div class="foot"><span class="chip">'+fmtDate(a.date)+' · '+a.time.replace(':','h')+'</span><span class="sp"></span>'+
       (a.phone?'<a class="mini" target="_blank" rel="noopener" href="'+wa(a.phone,msgs[k])+'">WhatsApp</a>':'')+
       (k==='wait'?'<button class="mini go" data-mv="'+a.id+':prog">Commencer</button>':k==='prog'?'<button class="mini go" data-mv="'+a.id+':done">Terminer</button>':'')+

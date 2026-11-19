@@ -1,3 +1,3 @@
-# Garage KZ Auto
+# Garage KZ Autos
 
-Site du Garage KZ Auto (Saint-Étienne) : accueil, prise de RDV sur créneaux disponibles, espace pro.
+Site du Garage KZ Autos (Saint-Étienne) : accueil, prise de RDV sur créneaux disponibles, espace pro.
