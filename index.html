@@ -213,6 +213,14 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
     </div>
   </section>
 
+  <section class="block hidden" id="tarifs">
+    <div class="wrap">
+      <h2>Nos tarifs</h2>
+      <p class="sub">Prix indicatifs TTC. Le devis définitif est établi à l'atelier selon votre véhicule.</p>
+      <div class="cards" id="tarifsList"></div>
+    </div>
+  </section>
+
   <section class="block" id="avis" style="background:#0e0e10">
     <div class="wrap">
       <h2>Avis clients</h2>
@@ -254,9 +262,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
         <div class="grid2">
           <label class="f">Nom complet<input id="b_name" autocomplete="name" placeholder="Prénom Nom"></label>
           <label class="f">Service
-            <select id="b_service">
-              <option>Révision</option><option>Vidange</option><option>Diagnostic moteur</option><option>Freins et plaquettes</option><option>Pneumatiques</option><option>Climatisation</option><option>Autre</option>
-            </select></label>
+            <select id="b_service"></select><small id="priceHint" style="color:var(--muted);font-weight:400"></small></label>
           <label class="f">Téléphone<input id="b_phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78"></label>
           <label class="f">Date disponible<input id="b_date" type="date"></label>
           <label class="f">Email (optionnel)<input id="b_email" type="email" autocomplete="email" placeholder="vous@exemple.fr"></label>
@@ -300,6 +306,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
     <button data-p="planning">Planning</button>
     <button data-p="clients">Clients et autos</button>
     <button data-p="devis">Devis et factures</button>
+    <button data-p="tarifs">Tarifs</button>
     <button data-p="horaires">Horaires</button>
     <button data-p="params">Paramètres</button>
     <div class="sp"></div>
@@ -332,7 +339,7 @@ let state = load() || seed();
 function ensureSettings(){
   const s=state.settings=state.settings||{};
   s.hours=s.hours||JSON.parse(JSON.stringify(DEFAULT_HOURS));
-  s.slot=s.slot||DEFAULT_SLOT_MIN; s.closed=s.closed||[]; s.blocked=s.blocked||[]; s.pwHash=s.pwHash||null;
+  s.slot=s.slot||DEFAULT_SLOT_MIN; s.closed=s.closed||[]; s.blocked=s.blocked||[]; s.pwHash=s.pwHash||null; s.prices=s.prices||{};
   HOURS=s.hours; SLOT_MIN=s.slot;
 }
 ensureSettings();
@@ -402,6 +409,16 @@ function renderHours(){
   }).join('');
 }
 renderHours();
+function priceLabel(svc){const p=(state.settings.prices||{})[svc];if(!p||!(p.amount>0))return '';const a=Number(p.amount).toLocaleString('fr-FR',{minimumFractionDigits:p.amount%1?2:0,maximumFractionDigits:2});return (p.from?'à partir de ':'')+a+' €'}
+function renderPrices(){
+  const sel=$('b_service'), cur=sel.value;
+  sel.innerHTML=SERVICES.map(n=>{const l=priceLabel(n);return '<option value="'+esc(n)+'">'+esc(n)+(l?' — '+l:'')+'</option>'}).join('');
+  if(SERVICES.includes(cur)) sel.value=cur;
+  const priced=SERVICES.filter(n=>priceLabel(n));
+  $('tarifsList').innerHTML=priced.map(n=>'<div class="card"><h3 style="font-size:20px">'+esc(n)+'</h3><p style="color:var(--text);font-size:20px;font-weight:700">'+priceLabel(n)+'</p></div>').join('');
+  $('tarifs').classList.toggle('hidden',!priced.length);
+  const l=priceLabel(sel.value); $('priceHint').textContent=l?'Tarif indicatif : '+l+' TTC. Le prix définitif est confirmé à l\'atelier.':'';
+}
 
 /* ============ Réservation ============ */
 let chosen=null;
@@ -445,6 +462,8 @@ function updateWa(){
 }
 function getForm(){return{name:$('b_name').value.trim(),phone:$('b_phone').value.trim(),email:$('b_email').value.trim(),car:$('b_car').value.trim(),plate:fmtPlate($('b_plate').value),service:$('b_service').value}}
 ['b_name','b_phone','b_email','b_car','b_plate','b_service'].forEach(id=>$(id).addEventListener('input',updateWa));
+$('b_service').addEventListener('change',renderPrices);
+renderPrices();
 $('b_plate').addEventListener('blur',()=>{$('b_plate').value=fmtPlate($('b_plate').value)});
 $('b_date').addEventListener('change',()=>{chosen=null;renderSlots();updateWa()});
 $('bookForm').addEventListener('submit',e=>{
@@ -504,6 +523,7 @@ function renderPro(){
   if(proPage==='clients') m.innerHTML=clientsHtml();
   if(proPage==='devis') m.innerHTML=devisHtml();
   if(proPage==='planning') m.innerHTML=planningHtml();
+  if(proPage==='tarifs') m.innerHTML=tarifsHtml();
   if(proPage==='horaires') m.innerHTML=horairesHtml();
   if(proPage==='params') m.innerHTML=paramsHtml();
   bindPro();
@@ -554,6 +574,15 @@ function bindPro(){
     const a=b.dataset.act;
     if(a==='gotorv'){proPage='rdv';renderPro()}
     if(a==='newrdv') apptModal(proPage==='planning'?planDate:null);
+    if(a==='saveprices'){
+      const prices={}, err=$('pr_err'); err.style.color='';
+      for(let i=0;i<SERVICES.length;i++){ if(!$('pr_'+i)) continue;
+        const raw=$('pr_'+i).value.trim().replace(',','.'); if(raw==='') continue;
+        const v=Number(raw); if(!isFinite(v)||v<0){err.textContent=SERVICES[i]+' : prix incorrect.';return}
+        if(v>0) prices[SERVICES[i]]={amount:Math.round(v*100)/100,from:$('pf_'+i).checked};
+      }
+      state.settings.prices=prices; save(); renderPrices(); err.style.color='var(--ok)'; err.textContent='Tarifs enregistrés.';
+    }
     if(a==='savehours'){
       const hours={}, err=$('h_err'); err.style.color='';
       for(const i of [0,1,2,3,4,5,6]){
@@ -615,6 +644,13 @@ function planningHtml(){
   return '<h1>Planning</h1><p class="lead">Tous les créneaux du garage. Un RDV pris ou un créneau bloqué n\'est plus proposé aux clients.</p>'+
   '<div class="box"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px"><button class="mini" data-pl="-1" aria-label="Jour précédent">‹</button><input id="pl_date" type="date" value="'+d+'" style="max-width:180px"><button class="mini" data-pl="1" aria-label="Jour suivant">›</button><b>'+dn+'</b>'+(list.length?'<span style="color:var(--muted)">'+free+' libre'+(free>1?'s':'')+' sur '+list.length+'</span>':'')+'<span style="flex:1"></span>'+
   (closed?'<button class="mini" data-dayopen="'+d+'">Rouvrir cette journée</button>':list.length?'<button class="mini x" data-dayclose="'+d+'">Fermer cette journée</button>':'')+'</div>'+body+orphHtml+'</div>';
+}
+function tarifsHtml(){
+  const pr=state.settings.prices||{};
+  const row=(n,i)=>{const p=pr[n]||{};return '<tr><td>'+esc(n)+'</td><td><input class="hh" type="number" min="0" step="0.5" id="pr_'+i+'" value="'+(p.amount>0?p.amount:'')+'" placeholder="Sur devis" style="width:120px"> €</td><td><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="pf_'+i+'"'+(p.from?' checked':'')+'> à partir de</label></td></tr>'};
+  return '<h1>Tarifs</h1><p class="lead">Les prix saisis s\'affichent sur le site et dans le choix du service à la prise de rendez-vous. Laissez vide pour « sur devis » : rien ne s\'affiche.</p>'+
+  '<div class="box tablewrap"><table class="t"><thead><tr><th>Prestation</th><th>Prix TTC</th><th>Affichage</th></tr></thead><tbody>'+SERVICES.map((n,i)=>n==='Autre'?'':row(n,i)).join('')+'</tbody></table>'+
+  '<div style="margin-top:16px"><button class="btn" data-act="saveprices">Enregistrer les tarifs</button></div><div class="err" id="pr_err" role="alert"></div></div>';
 }
 function horairesHtml(){
   const s=state.settings, today=ymd(new Date());
