@@ -306,7 +306,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
     <button data-p="planning">Planning</button>
     <button data-p="clients">Clients et autos</button>
     <button data-p="devis">Devis et factures</button>
-    <button data-p="tarifs">Tarifs</button>
+    <button data-p="tarifs">Prestations et tarifs</button>
     <button data-p="horaires">Horaires</button>
     <button data-p="params">Paramètres</button>
     <div class="sp"></div>
@@ -317,6 +317,9 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
 
 <div id="modalRoot"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
 /* ============ Configuration du garage ============ */
 const GARAGE = { nom:'Garage KZ Autos', tel:'07 66 76 90 91', wa:'33766769091', adresse:'65 rue Rouget de Lisle, 42000 Saint-Étienne' };
@@ -329,17 +332,20 @@ const DEFAULT_HOURS = {
 };
 let SLOT_MIN = DEFAULT_SLOT_MIN;
 let HOURS = DEFAULT_HOURS;
-const SERVICES = ['Révision','Vidange','Diagnostic moteur','Freins et plaquettes','Pneumatiques','Climatisation','Autre'];
+const DEFAULT_SERVICES = ['Révision','Vidange','Diagnostic moteur','Freins et plaquettes','Pneumatiques','Climatisation'];
 const DAYS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
 const STATUS = { wait:'À prendre en charge', prog:'En cours (atelier)', done:'Terminé (prêt)' };
 
-/* ============ État ============ */
-const KEY='kz-auto-preview-v1';
-let state = load() || seed();
+/* ============ État et base de données (Firebase) ============ */
+const FB_CONFIG={apiKey:"AIzaSyAAc_c9D3dpLB1yYe8UKXz95D3FbC54_BQ",authDomain:"kzautos-78773.firebaseapp.com",projectId:"kzautos-78773",storageBucket:"kzautos-78773.firebasestorage.app",messagingSenderId:"564372873635",appId:"1:564372873635:web:48dbdbd3e1d4a85543ba16"};
+let state={pro:false,user:null,docs:[],appts:[],taken:{},settings:{}};
+let db=null, auth=null, cloudErr='', authReady=false, loginMsg='', unsubAdmin=[];
+const ready={cfg:false,taken:false};
 function ensureSettings(){
   const s=state.settings=state.settings||{};
   s.hours=s.hours||JSON.parse(JSON.stringify(DEFAULT_HOURS));
-  s.slot=s.slot||DEFAULT_SLOT_MIN; s.closed=s.closed||[]; s.blocked=s.blocked||[]; s.pwHash=s.pwHash||null; s.prices=s.prices||{};
+  s.slot=s.slot||DEFAULT_SLOT_MIN; s.closed=s.closed||[];
+  s.services=s.services||DEFAULT_SERVICES.map(n=>({name:n,amount:0,from:false}));
   HOURS=s.hours; SLOT_MIN=s.slot;
 }
 ensureSettings();
@@ -348,25 +354,64 @@ function ymd(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate
 function parse(s){const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
 function fmtDate(s){const d=parse(s);return DAYS[d.getDay()].slice(0,3)+' '+pad(d.getDate())+'/'+pad(d.getMonth()+1)}
 function nextOpen(from){const d=new Date(from);for(let i=0;i<14;i++){if(HOURS[d.getDay()].length)return d;d.setDate(d.getDate()+1)}return d}
-function seed(){
-  const d=ymd(nextOpen(new Date(Date.now()+864e5)));
-  return { pro:false, id:5, docs:[
-      {n:'DEV-1001',client:'Client exemple A',date:d,montant:450.5,statut:'En attente'},
-      {n:'FAC-1002',client:'Client exemple B',date:d,montant:290,statut:'Payée'}],
-    appts:[
-    {id:1,name:'Client exemple A',phone:'0612345678',email:'',car:'Peugeot 308',plate:'GH-482-KL',service:'Révision',date:d,time:'09:00',status:'wait'},
-    {id:2,name:'Client exemple B',phone:'0698765432',email:'',car:'Audi A3',plate:'FD-917-ZR',service:'Freins et plaquettes',date:d,time:'14:00',status:'wait'},
-    {id:3,name:'Client exemple C',phone:'0611223344',email:'',car:'Renault Clio',plate:'EA-305-MN',service:'Diagnostic moteur',date:ymd(new Date()),time:'08:00',status:'prog'},
-    {id:4,name:'Client exemple D',phone:'0655443322',email:'',car:'Citroën C3',plate:'DC-768-PB',service:'Pneumatiques',date:ymd(new Date()),time:'08:00',status:'done'}
-  ]};
+function save(){}
+/* Firestore n'accepte pas les tableaux imbriqués : les plages horaires sont stockées en {a,b}. */
+function hoursToDb(h){const o={};for(let i=0;i<7;i++)o[i]=(h[i]||[]).map(([a,b])=>({a,b}));return o}
+function hoursFromDb(o){const h={};for(let i=0;i<7;i++)h[i]=((o&&o[i])||[]).map(r=>[r.a,r.b]);return h}
+function applyConfig(d){
+  const s=state.settings;
+  if(d.hours) s.hours=hoursFromDb(d.hours);
+  if(d.slot) s.slot=d.slot;
+  s.closed=Array.isArray(d.closed)?d.closed:[];
+  if(Array.isArray(d.services)) s.services=d.services.map(x=>({name:String(x.name||''),amount:+x.amount||0,from:!!x.from})).filter(x=>x.name);
+  ensureSettings();
 }
-function load(){try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):null}catch(e){return null}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
+function saveConfig(){
+  const s=state.settings;
+  return db.doc('config/public').set({hours:hoursToDb(s.hours),slot:s.slot,closed:s.closed,services:s.services});
+}
+function svcNames(){return state.settings.services.map(s=>s.name).concat(['Autre'])}
+function netErr(e){return e&&e.code==='permission-denied'?'Action refusée.':'Connexion impossible pour le moment. Réessayez.'}
+function initCloud(){
+  if(!window.firebase){cloudErr='Le service de réservation est momentanément indisponible.';refreshAll();return}
+  try{ firebase.initializeApp(FB_CONFIG); db=firebase.firestore(); auth=firebase.auth(); }
+  catch(e){cloudErr='Le service de réservation est momentanément indisponible.';refreshAll();return}
+  const bad=()=>{cloudErr='Connexion à la base impossible pour le moment.';refreshAll()};
+  db.doc('config/public').onSnapshot(snap=>{applyConfig(snap.exists?snap.data():{});ready.cfg=true;cloudErr='';refreshAll()},bad);
+  db.collection('taken').onSnapshot(snap=>{const t={};snap.forEach(d=>{t[d.id]=d.data()});state.taken=t;ready.taken=true;cloudErr='';refreshAll()},bad);
+  auth.onAuthStateChanged(onAuth);
+}
+async function onAuth(user){
+  stopAdmin();
+  if(!user){state.pro=false;state.user=null;authReady=true;route();return}
+  try{
+    const a=await db.doc('admin/'+user.uid).get();
+    if(!a.exists){loginMsg='Ce compte n\'a pas accès à l\'espace gérant.';await auth.signOut();return}
+    state.pro=true; state.user=user; startAdmin();
+  }catch(e){state.pro=false;loginMsg='Impossible de vérifier votre accès. Réessayez.'}
+  authReady=true; route();
+}
+function startAdmin(){
+  unsubAdmin.push(db.collection('appts').onSnapshot(snap=>{state.appts=snap.docs.map(d=>({id:d.id,...d.data()}));refreshPro()},()=>{}));
+  unsubAdmin.push(db.doc('private/docs').onSnapshot(s=>{state.docs=s.exists?(s.data().list||[]):[];refreshPro()},()=>{}));
+}
+function stopAdmin(){unsubAdmin.forEach(f=>{try{f()}catch(e){}});unsubAdmin=[];state.appts=[];state.docs=[]}
+function viewOn(v){const e=document.getElementById('v-'+v);return !!e&&!e.classList.contains('hidden')}
+function refreshPro(){
+  if(!state.pro||!viewOn('pro')) return;
+  const waiting=state.appts.filter(a=>a.status==='wait').length; $('pillWait').textContent=waiting; $('pillWait').classList.toggle('hidden',!waiting);
+  if(['dash','rdv','clients','devis','planning'].includes(proPage)&&!$('modalRoot').innerHTML.trim()) renderPro();
+}
+function refreshAll(){
+  renderHours(); renderPrices();
+  if(viewOn('rdv')) renderSlots();
+  refreshPro();
+}
 
 /* ============ Créneaux ============ */
 function isClosedDate(date){return (state.settings.closed||[]).some(c=>c.date===date)}
 function closedLabel(date){const c=(state.settings.closed||[]).find(c=>c.date===date);return c?c.label||'':''}
-function isBlockedSlot(date,time){return (state.settings.blocked||[]).some(b=>b.date===date&&b.time===time)}
+function isBlockedSlot(date,time){const t=state.taken[date+'_'+time];return !!(t&&t.blocked)}
 function slotsFor(dateStr){
   const d=parse(dateStr), out=[];
   if(isClosedDate(dateStr)) return out;
@@ -375,7 +420,7 @@ function slotsFor(dateStr){
   }
   return out;
 }
-function isTaken(date,time){return state.appts.some(a=>a.date===date&&a.time===time)||isBlockedSlot(date,time)}
+function isTaken(date,time){return !!state.taken[date+'_'+time]}
 function nextOpenAvailable(from){const d=new Date(from);for(let i=0;i<90;i++){const s=ymd(d);if(freeCount(s)>0)return s;d.setDate(d.getDate()+1)}return ymd(from)}
 function hhmm(x){if(x===''||x==null)return '';const m=Math.round(x*60);return pad(Math.floor(m/60))+':'+pad(m%60)}
 function phm(s){if(!s)return null;const [h,m]=s.split(':').map(Number);return h+m/60}
@@ -409,15 +454,18 @@ function renderHours(){
   }).join('');
 }
 renderHours();
-function priceLabel(svc){const p=(state.settings.prices||{})[svc];if(!p||!(p.amount>0))return '';const a=Number(p.amount).toLocaleString('fr-FR',{minimumFractionDigits:p.amount%1?2:0,maximumFractionDigits:2});return (p.from?'à partir de ':'')+a+' €'}
+function priceLabel(svc){const p=state.settings.services.find(x=>x.name===svc);if(!p||!(p.amount>0))return '';const a=Number(p.amount).toLocaleString('fr-FR',{minimumFractionDigits:p.amount%1?2:0,maximumFractionDigits:2});return (p.from?'à partir de ':'')+a+' €'}
 function renderPrices(){
-  const sel=$('b_service'), cur=sel.value;
-  sel.innerHTML=SERVICES.map(n=>{const l=priceLabel(n);return '<option value="'+esc(n)+'">'+esc(n)+(l?' — '+l:'')+'</option>'}).join('');
-  if(SERVICES.includes(cur)) sel.value=cur;
-  const priced=SERVICES.filter(n=>priceLabel(n));
+  const sel=$('b_service');
+  if(sel){
+    const cur=sel.value;
+    sel.innerHTML=svcNames().map(n=>{const l=priceLabel(n);return '<option value="'+esc(n)+'">'+esc(n)+(l?' — '+l:'')+'</option>'}).join('');
+    if(svcNames().includes(cur)) sel.value=cur;
+    const l=priceLabel(sel.value); $('priceHint').textContent=l?'Tarif indicatif : '+l+' TTC. Le prix définitif est confirmé à l\'atelier.':'';
+  }
+  const priced=svcNames().filter(n=>priceLabel(n));
   $('tarifsList').innerHTML=priced.map(n=>'<div class="card"><h3 style="font-size:20px">'+esc(n)+'</h3><p style="color:var(--text);font-size:20px;font-weight:700">'+priceLabel(n)+'</p></div>').join('');
   $('tarifs').classList.toggle('hidden',!priced.length);
-  const l=priceLabel(sel.value); $('priceHint').textContent=l?'Tarif indicatif : '+l+' TTC. Le prix définitif est confirmé à l\'atelier.':'';
 }
 
 /* ============ Réservation ============ */
@@ -432,6 +480,8 @@ function initBooking(){
 }
 function renderSlots(){
   const date=$('b_date').value, box=$('slotBox'); chosen=chosen&&chosen.date===date?chosen:null;
+  if(!(ready.cfg&&ready.taken)){box.innerHTML='<div class="notice">'+(cloudErr?esc(cloudErr)+' Appelez-nous au '+GARAGE.tel+' ou écrivez-nous sur WhatsApp.':'Chargement des créneaux…')+'</div>';return}
+  if(chosen&&isTaken(chosen.date,chosen.time)) chosen=null;
   if(!date){box.innerHTML='';return}
   const list=slotsFor(date);
   const dname=DAYS[parse(date).getDay()];
@@ -475,39 +525,55 @@ $('bookForm').addEventListener('submit',e=>{
   if(!f.car) return err.textContent='Indiquez le modèle du véhicule.';
   if(!plateOk(f.plate)) return err.textContent='Indiquez l\'immatriculation du véhicule (ex : AB-123-CD).';
   if(!chosen) return err.textContent='Choisissez un créneau libre.';
+  if(!db||!(ready.cfg&&ready.taken)) return err.textContent='Connexion en cours, réessayez dans un instant.';
   if(isTaken(chosen.date,chosen.time)){chosen=null;renderSlots();return err.textContent='Ce créneau vient d\'être pris. Choisissez-en un autre.'}
-  const a={id:state.id++,...f,date:chosen.date,time:chosen.time,status:'wait'};
-  state.appts.push(a); save();
-  const msg='Bonjour, c\'est '+f.name+'. Je confirme mon rendez-vous du '+fmtDate(a.date)+' à '+a.time.replace(':','h')+' pour : '+f.service+' ('+f.car+', '+f.plate+').';
-  $('formCard').innerHTML='<div class="success"><h2>Demande envoyée !</h2><p>Votre créneau du <b>'+fmtDate(a.date)+' à '+a.time.replace(':','h')+'</b> est réservé. Il n\'est plus proposé aux autres clients.</p><div class="row"><a class="btn wa-solid" target="_blank" rel="noopener" href="https://wa.me/'+GARAGE.wa+'?text='+encodeURIComponent(msg)+'">Confirmer sur WhatsApp</a><button class="btn ghost" id="again">Nouvelle réservation</button></div></div>';
-  $('again').addEventListener('click',()=>location.reload());
+  const btn=e.target.querySelector('button[type=submit]'); if(btn) btn.disabled=true; err.textContent='';
+  const apptId=db.collection('appts').doc().id, date=chosen.date, time=chosen.time;
+  const a={...f,date,time,status:'wait',createdAt:Date.now()};
+  const batch=db.batch();
+  batch.set(db.doc('appts/'+apptId),a);
+  batch.set(db.doc('taken/'+date+'_'+time),{date,time,apptId});
+  batch.commit().then(()=>{
+    const msg='Bonjour, c\'est '+f.name+'. Je confirme mon rendez-vous du '+fmtDate(date)+' à '+time.replace(':','h')+' pour : '+f.service+' ('+f.car+', '+f.plate+').';
+    $('formCard').innerHTML='<div class="success"><h2>Demande envoyée !</h2><p>Votre créneau du <b>'+fmtDate(date)+' à '+time.replace(':','h')+'</b> est réservé. Il n\'est plus proposé aux autres clients.</p><div class="row"><a class="btn wa-solid" target="_blank" rel="noopener" href="https://wa.me/'+GARAGE.wa+'?text='+encodeURIComponent(msg)+'">Confirmer sur WhatsApp</a><button class="btn ghost" id="again">Nouvelle réservation</button></div></div>';
+    $('again').addEventListener('click',()=>location.reload());
+  }).catch(ex=>{
+    if(btn) btn.disabled=false; chosen=null; renderSlots();
+    err.textContent=ex&&ex.code==='permission-denied'?'Ce créneau vient d\'être pris. Choisissez-en un autre.':'Connexion impossible pour le moment. Réessayez ou appelez-nous au '+GARAGE.tel+'.';
+  });
 });
 
 /* ============ Espace pro ============ */
-async function sha(s){
-  if(!(window.crypto&&crypto.subtle)) return 'x:'+btoa(unescape(encodeURIComponent(s)));
-  const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('kz|'+s));
-  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
-}
 function renderLogin(){
-  const first=!state.settings.pwHash;
-  $('loginForm').innerHTML=(first?'<p style="margin:0;color:var(--muted);font-size:14px">Première connexion : choisissez le mot de passe du gérant (6 caractères minimum).</p>':'')+
-    '<label class="f">'+(first?'Nouveau mot de passe':'Mot de passe')+'<input id="l_pass" type="password" autocomplete="'+(first?'new-password':'current-password')+'"></label>'+
-    (first?'<label class="f">Confirmer<input id="l_pass2" type="password" autocomplete="new-password"></label>':'')+
-    '<div class="err" id="loginErr" role="alert"></div><button class="btn" type="submit">'+(first?'Créer et entrer':'Accéder au dashboard')+'</button>';
-  $('loginNote').textContent='Aperçu : le mot de passe est enregistré dans ce navigateur uniquement. La version finale aura une vraie connexion sécurisée.';
+  const f=$('loginForm');
+  if(!authReady){ f.innerHTML='<p style="margin:0;color:var(--muted)">Vérification de la connexion…</p>'; $('loginNote').textContent=''; return }
+  f.innerHTML='<label class="f">E-mail<input id="l_mail" type="email" autocomplete="username" inputmode="email"></label>'+
+    '<label class="f">Mot de passe<input id="l_pass" type="password" autocomplete="current-password"></label>'+
+    '<div class="err" id="loginErr" role="alert"></div><button class="btn" type="submit">Accéder au dashboard</button>'+
+    '<button class="btn ghost" type="button" id="l_forgot">Mot de passe oublié ?</button>';
+  if(loginMsg){$('loginErr').textContent=loginMsg;loginMsg=''}
+  $('loginNote').textContent='Accès réservé au gérant du garage.';
+  $('l_forgot').addEventListener('click',()=>{
+    const m=$('l_mail').value.trim(), err=$('loginErr'); err.style.color='';
+    if(!m) return err.textContent='Indiquez votre e-mail ci-dessus, puis cliquez à nouveau.';
+    if(!auth) return err.textContent='Service indisponible pour le moment.';
+    auth.sendPasswordResetEmail(m).then(()=>{err.style.color='var(--ok)';err.textContent='Si ce compte existe, un e-mail pour changer le mot de passe vient d\'être envoyé.'}).catch(()=>{err.textContent='Impossible d\'envoyer l\'e-mail pour le moment.'});
+  });
 }
-$('loginForm').addEventListener('submit',async e=>{
+$('loginForm').addEventListener('submit',e=>{
   e.preventDefault();
-  const err=$('loginErr'), p=$('l_pass').value, first=!state.settings.pwHash;
-  if(first){
-    if(p.length<6) return err.textContent='Le mot de passe doit faire au moins 6 caractères.';
-    if(p!==$('l_pass2').value) return err.textContent='Les deux mots de passe sont différents.';
-    state.settings.pwHash=await sha(p);
-  } else if(await sha(p)!==state.settings.pwHash){ return err.textContent='Mot de passe incorrect.' }
-  state.pro=true;save();location.hash='pro';route();
+  const err=$('loginErr'); err.style.color='';
+  if(!auth) return err.textContent='Service indisponible pour le moment.';
+  const m=$('l_mail').value.trim(), p=$('l_pass').value;
+  if(!m||!p) return err.textContent='Indiquez votre e-mail et votre mot de passe.';
+  const btn=e.target.querySelector('button[type=submit]'); if(btn) btn.disabled=true;
+  auth.signInWithEmailAndPassword(m,p).then(()=>{location.hash='pro'}).catch(ex=>{
+    if(btn) btn.disabled=false;
+    const c=ex&&ex.code;
+    err.textContent=(c==='auth/too-many-requests')?'Trop d\'essais. Patientez quelques minutes ou changez le mot de passe.':(c==='auth/network-request-failed')?'Connexion impossible pour le moment.':'E-mail ou mot de passe incorrect.';
+  });
 });
-$('logoutBtn').addEventListener('click',()=>{state.pro=false;save();location.hash='pro';route()});
+$('logoutBtn').addEventListener('click',()=>{ if(auth) auth.signOut(); location.hash='pro'; });
 document.querySelectorAll('.side [data-p]').forEach(b=>b.addEventListener('click',()=>{proPage=b.dataset.p;renderPro()}));
 
 function wa(phone,text){let p=phone.replace(/\D/g,'');if(p.startsWith('0'))p='33'+p.slice(1);return 'https://wa.me/'+p+'?text='+encodeURIComponent(text)}
@@ -530,11 +596,11 @@ function renderPro(){
 }
 function dashHtml(){
   const w=state.appts.filter(a=>a.status==='wait').length, p=state.appts.filter(a=>a.status==='prog').length;
-  const recent=[...state.appts].sort((a,b)=>b.id-a.id).slice(0,5);
+  const recent=[...state.appts].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,5);
   return '<div class="top"><div><h1>Tableau de bord</h1><p class="lead">Bienvenue dans votre espace de gestion.</p></div><button class="btn" data-act="newrdv">+ Nouveau rendez-vous</button></div>'+
   '<div class="tiles"><div class="tile"><span>RDV en attente</span><b>'+w+'</b></div><div class="tile"><span>Véhicules en atelier</span><b>'+p+'</b></div><div class="tile"><span>Total clients</span><b>'+clients().length+'</b></div></div>'+
   '<div class="two"><div class="box"><h3>Activité récente</h3>'+(recent.map(a=>'<div class="row-item"><div><b>'+esc(a.name)+'</b> <span style="color:var(--muted)">('+esc(carLabel(a))+')</span><small>'+esc(a.service)+' · '+fmtDate(a.date)+' '+a.time.replace(':','h')+'</small></div><span class="tag '+a.status+'">'+STATUS[a.status].toUpperCase()+'</span></div>').join('')||'<p style="color:var(--muted)">Aucun rendez-vous.</p>')+'</div>'+
-  '<div class="box quick"><h3>Actions rapides</h3><button data-act="newdoc">Créer un devis<small>Ajouter un document client</small></button><button data-act="gotorv">Voir les rendez-vous<small>Atelier en temps réel</small></button><button data-act="reset">Remettre les données d\'exemple<small>Réinitialise l\'aperçu</small></button></div></div>';
+  '<div class="box quick"><h3>Actions rapides</h3><button data-act="newdoc">Créer un devis<small>Ajouter un document client</small></button><button data-act="gotorv">Voir les rendez-vous<small>Atelier en temps réel</small></button><button data-act="goplanning">Ouvrir le planning<small>Bloquer un créneau, fermer un jour</small></button></div></div>';
 }
 function kanbanHtml(){
   const col=(k,color)=>{const items=state.appts.filter(a=>a.status===k).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
@@ -563,25 +629,38 @@ function bindPro(){
   const pd=$('pl_date'); if(pd) pd.addEventListener('change',()=>{planDate=pd.value||planDate;renderPro()});
   m.querySelectorAll('[data-pl]').forEach(b=>b.addEventListener('click',()=>{const d=parse(planDate);d.setDate(d.getDate()+(+b.dataset.pl));planDate=ymd(d);renderPro()}));
   m.querySelectorAll('[data-addslot]').forEach(b=>b.addEventListener('click',()=>apptModal(planDate,b.dataset.addslot)));
-  m.querySelectorAll('[data-block]').forEach(b=>b.addEventListener('click',()=>{state.settings.blocked.push({date:planDate,time:b.dataset.block});save();renderPro()}));
-  m.querySelectorAll('[data-unblock]').forEach(b=>b.addEventListener('click',()=>{state.settings.blocked=state.settings.blocked.filter(x=>!(x.date===planDate&&x.time===b.dataset.unblock));save();renderPro()}));
-  m.querySelectorAll('[data-dayclose]').forEach(b=>b.addEventListener('click',()=>{if(!isClosedDate(b.dataset.dayclose))state.settings.closed.push({date:b.dataset.dayclose,label:''});save();renderPro()}));
-  m.querySelectorAll('[data-dayopen]').forEach(b=>b.addEventListener('click',()=>{state.settings.closed=state.settings.closed.filter(c=>c.date!==b.dataset.dayopen);save();renderPro()}));
-  m.querySelectorAll('[data-delclosed]').forEach(b=>b.addEventListener('click',()=>{state.settings.closed=state.settings.closed.filter(c=>c.date!==b.dataset.delclosed);save();renderPro()}));
-  m.querySelectorAll('[data-mv]').forEach(b=>b.addEventListener('click',()=>{const [id,s]=b.dataset.mv.split(':');state.appts.find(a=>a.id==id).status=s;save();renderPro()}));
-  m.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{state.appts=state.appts.filter(a=>a.id!=b.dataset.del);save();renderPro()}));
+  const fail=ex=>alert(netErr(ex));
+  m.querySelectorAll('[data-block]').forEach(b=>b.addEventListener('click',()=>{const t=b.dataset.block;db.doc('taken/'+planDate+'_'+t).set({date:planDate,time:t,blocked:true}).catch(fail)}));
+  m.querySelectorAll('[data-unblock]').forEach(b=>b.addEventListener('click',()=>{db.doc('taken/'+planDate+'_'+b.dataset.unblock).delete().catch(fail)}));
+  m.querySelectorAll('[data-dayclose]').forEach(b=>b.addEventListener('click',()=>{if(!isClosedDate(b.dataset.dayclose))state.settings.closed.push({date:b.dataset.dayclose,label:''});saveConfig().then(()=>renderPro()).catch(fail)}));
+  m.querySelectorAll('[data-dayopen]').forEach(b=>b.addEventListener('click',()=>{state.settings.closed=state.settings.closed.filter(c=>c.date!==b.dataset.dayopen);saveConfig().then(()=>renderPro()).catch(fail)}));
+  m.querySelectorAll('[data-delclosed]').forEach(b=>b.addEventListener('click',()=>{state.settings.closed=state.settings.closed.filter(c=>c.date!==b.dataset.delclosed);saveConfig().then(()=>renderPro()).catch(fail)}));
+  m.querySelectorAll('[data-mv]').forEach(b=>b.addEventListener('click',()=>{const [id,st]=b.dataset.mv.split(':');db.doc('appts/'+id).update({status:st}).catch(fail)}));
+  m.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{
+    const ap=state.appts.find(x=>x.id===b.dataset.del); if(!ap) return;
+    if(!confirm('Supprimer ce rendez-vous et libérer le créneau ?')) return;
+    const batch=db.batch(); batch.delete(db.doc('appts/'+ap.id)); batch.delete(db.doc('taken/'+ap.date+'_'+ap.time)); batch.commit().catch(fail);
+  }));
+  m.querySelectorAll('[data-delsvc]').forEach(b=>b.addEventListener('click',()=>{readSvcDraft();state.settings.services.splice(+b.dataset.delsvc,1);renderPro()}));
   m.querySelectorAll('[data-act]').forEach(b=>b.addEventListener('click',()=>{
     const a=b.dataset.act;
     if(a==='gotorv'){proPage='rdv';renderPro()}
+    if(a==='goplanning'){proPage='planning';renderPro()}
     if(a==='newrdv') apptModal(proPage==='planning'?planDate:null);
+    if(a==='addsvc'){readSvcDraft();state.settings.services.push({name:'',amount:0,from:false});renderPro();const l=$('sv_'+(state.settings.services.length-1));if(l)l.focus()}
     if(a==='saveprices'){
-      const prices={}, err=$('pr_err'); err.style.color='';
-      for(let i=0;i<SERVICES.length;i++){ if(!$('pr_'+i)) continue;
-        const raw=$('pr_'+i).value.trim().replace(',','.'); if(raw==='') continue;
-        const v=Number(raw); if(!isFinite(v)||v<0){err.textContent=SERVICES[i]+' : prix incorrect.';return}
-        if(v>0) prices[SERVICES[i]]={amount:Math.round(v*100)/100,from:$('pf_'+i).checked};
+      const err=$('pr_err'); err.style.color='';
+      const list=readSvcDraft(), seen=new Set();
+      for(const x of list){
+        if(!x.name){err.textContent='Une prestation n\'a pas de nom.';return}
+        if(x.name.length>60){err.textContent=x.name.slice(0,20)+'… : nom trop long (60 caractères maximum).';return}
+        if(x.name.toLowerCase()==='autre'){err.textContent='« Autre » est déjà proposé automatiquement.';return}
+        if(seen.has(x.name.toLowerCase())){err.textContent='« '+x.name+' » apparaît deux fois.';return}
+        seen.add(x.name.toLowerCase());
+        if(x.bad){err.textContent=x.name+' : prix incorrect.';return}
       }
-      state.settings.prices=prices; save(); renderPrices(); err.style.color='var(--ok)'; err.textContent='Tarifs enregistrés.';
+      state.settings.services=list.map(x=>({name:x.name,amount:x.amount,from:x.from}));
+      saveConfig().then(()=>{renderPrices();err.style.color='var(--ok)';err.textContent='Prestations enregistrées.'}).catch(ex=>{err.textContent=netErr(ex)});
     }
     if(a==='savehours'){
       const hours={}, err=$('h_err'); err.style.color='';
@@ -598,28 +677,24 @@ function bindPro(){
       }
       if(![0,1,2,3,4,5,6].some(i=>hours[i].length)){err.textContent='Ouvrez au moins un jour.';return}
       const slot=+$('h_slot').value;
-      state.settings.hours=hours; state.settings.slot=slot; HOURS=hours; SLOT_MIN=slot; save(); renderHours(); planDate=null;
+      state.settings.hours=hours; state.settings.slot=slot; HOURS=hours; SLOT_MIN=slot; planDate=null;
       const today=ymd(new Date()), orph=state.appts.filter(x=>x.date>=today&&!slotsFor(x.date).includes(x.time)).length;
-      err.style.color='var(--ok)';
-      err.textContent='Horaires enregistrés.'+(orph?' '+orph+' RDV existant'+(orph>1?'s sont':' est')+' hors des nouveaux créneaux : '+(orph>1?'ils restent':'il reste')+' visible'+(orph>1?'s':'')+' dans Planning.':'');
+      saveConfig().then(()=>{renderHours();err.style.color='var(--ok)';
+      err.textContent='Horaires enregistrés.'+(orph?' '+orph+' RDV existant'+(orph>1?'s sont':' est')+' hors des nouveaux créneaux : '+(orph>1?'ils restent':'il reste')+' visible'+(orph>1?'s':'')+' dans Planning.':'')}).catch(ex=>{err.textContent=netErr(ex)});
     }
     if(a==='addclosed'){
       const d=$('c_date').value, label=$('c_label').value.trim(); if(!d) return;
       if(!isClosedDate(d)) state.settings.closed.push({date:d,label});
-      save();
-      const n=state.appts.filter(x=>x.date===d).length; renderPro();
-      if(n){const e=$('c_msg'); if(e) e.textContent='Attention : '+n+' RDV existe'+(n>1?'nt':'')+' déjà ce jour-là. Pensez à prévenir les clients.'}
+      const n=state.appts.filter(x=>x.date===d).length;
+      saveConfig().then(()=>{renderPro();
+      if(n){const e=$('c_msg'); if(e) e.textContent='Attention : '+n+' RDV existe'+(n>1?'nt':'')+' déjà ce jour-là. Pensez à prévenir les clients.'}}).catch(fail);
     }
-    if(a==='savepw'){(async()=>{
-      const err=$('p_err'), cur=$('p_cur')?$('p_cur').value:'', n1=$('p_new').value, n2=$('p_new2').value; err.style.color='';
-      if(state.settings.pwHash && await sha(cur)!==state.settings.pwHash) return err.textContent='Mot de passe actuel incorrect.';
-      if(n1.length<6) return err.textContent='Le nouveau mot de passe doit faire au moins 6 caractères.';
-      if(n1!==n2) return err.textContent='Les deux mots de passe sont différents.';
-      state.settings.pwHash=await sha(n1); save(); err.style.color='var(--ok)'; err.textContent='Mot de passe modifié.';
-      $('p_new').value=''; $('p_new2').value=''; if($('p_cur')) $('p_cur').value='';
-    })()}
+    if(a==='savepw'){
+      const err=$('p_err'); err.style.color='';
+      if(!auth||!state.user) return;
+      auth.sendPasswordResetEmail(state.user.email).then(()=>{err.style.color='var(--ok)';err.textContent='E-mail envoyé à '+state.user.email+' : ouvrez-le pour choisir un nouveau mot de passe.'}).catch(()=>{err.textContent='Impossible d\'envoyer l\'e-mail pour le moment.'});
+    }
     if(a==='newdoc') docModal();
-    if(a==='reset'){const p=state.pro, s=state.settings;state=seed();state.pro=p;state.settings=s;ensureSettings();save();renderPro()}
   }));
 }
 let planDate=null;
@@ -645,12 +720,22 @@ function planningHtml(){
   '<div class="box"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px"><button class="mini" data-pl="-1" aria-label="Jour précédent">‹</button><input id="pl_date" type="date" value="'+d+'" style="max-width:180px"><button class="mini" data-pl="1" aria-label="Jour suivant">›</button><b>'+dn+'</b>'+(list.length?'<span style="color:var(--muted)">'+free+' libre'+(free>1?'s':'')+' sur '+list.length+'</span>':'')+'<span style="flex:1"></span>'+
   (closed?'<button class="mini" data-dayopen="'+d+'">Rouvrir cette journée</button>':list.length?'<button class="mini x" data-dayclose="'+d+'">Fermer cette journée</button>':'')+'</div>'+body+orphHtml+'</div>';
 }
+function readSvcDraft(){
+  const out=[];
+  state.settings.services.forEach((_,i)=>{
+    const n=$('sv_'+i); if(!n) return;
+    const raw=$('pr_'+i).value.trim().replace(',','.'); let amount=0, bad=false;
+    if(raw!==''){const v=Number(raw); if(!isFinite(v)||v<0) bad=true; else amount=Math.round(v*100)/100}
+    out.push({name:n.value.trim(),amount,from:$('pf_'+i).checked,bad});
+  });
+  if(out.length) state.settings.services=out.map(x=>({name:x.name,amount:x.amount,from:x.from}));
+  return out;
+}
 function tarifsHtml(){
-  const pr=state.settings.prices||{};
-  const row=(n,i)=>{const p=pr[n]||{};return '<tr><td>'+esc(n)+'</td><td><input class="hh" type="number" min="0" step="0.5" id="pr_'+i+'" value="'+(p.amount>0?p.amount:'')+'" placeholder="Sur devis" style="width:120px"> €</td><td><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="pf_'+i+'"'+(p.from?' checked':'')+'> à partir de</label></td></tr>'};
-  return '<h1>Tarifs</h1><p class="lead">Les prix saisis s\'affichent sur le site et dans le choix du service à la prise de rendez-vous. Laissez vide pour « sur devis » : rien ne s\'affiche.</p>'+
-  '<div class="box tablewrap"><table class="t"><thead><tr><th>Prestation</th><th>Prix TTC</th><th>Affichage</th></tr></thead><tbody>'+SERVICES.map((n,i)=>n==='Autre'?'':row(n,i)).join('')+'</tbody></table>'+
-  '<div style="margin-top:16px"><button class="btn" data-act="saveprices">Enregistrer les tarifs</button></div><div class="err" id="pr_err" role="alert"></div></div>';
+  const row=(x,i)=>'<tr><td><input class="hh" id="sv_'+i+'" value="'+esc(x.name)+'" placeholder="Nom de la prestation" maxlength="60" style="width:100%;min-width:160px"></td><td><input class="hh" type="number" min="0" step="0.5" id="pr_'+i+'" value="'+(x.amount>0?x.amount:'')+'" placeholder="Sur devis" style="width:110px"> €</td><td><label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="pf_'+i+'"'+(x.from?' checked':'')+'> à partir de</label></td><td><button class="mini x" data-delsvc="'+i+'" title="Retirer cette prestation">Retirer</button></td></tr>';
+  return '<h1>Prestations et tarifs</h1><p class="lead">Vos prestations s\'affichent sur le site et dans le choix du service à la prise de rendez-vous. Un prix vide veut dire « sur devis » : rien ne s\'affiche. « Autre » est toujours proposé en dernier.</p>'+
+  '<div class="box tablewrap"><table class="t"><thead><tr><th>Prestation</th><th>Prix TTC</th><th>Affichage</th><th></th></tr></thead><tbody>'+state.settings.services.map(row).join('')+'</tbody></table>'+
+  '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn ghost" data-act="addsvc">+ Ajouter une prestation</button><button class="btn" data-act="saveprices">Enregistrer</button></div><div class="err" id="pr_err" role="alert"></div></div>';
 }
 function horairesHtml(){
   const s=state.settings, today=ymd(new Date());
@@ -665,12 +750,9 @@ function horairesHtml(){
   '<div style="margin-top:10px">'+(fut.map(c=>'<div class="row-item"><div><b>'+fmtDate(c.date)+'</b>'+(c.label?'<small>'+esc(c.label)+'</small>':'')+'</div><button class="mini x" data-delclosed="'+c.date+'">Retirer</button></div>').join('')||'<p style="color:var(--muted);margin:0">Aucun jour de fermeture à venir.</p>')+'</div></div>';
 }
 function paramsHtml(){
-  const has=!!state.settings.pwHash;
-  return '<h1>Paramètres</h1><p class="lead">Accès gérant et données de l\'aperçu.</p>'+
-  '<div class="box" style="max-width:480px"><h3>Mot de passe du gérant</h3><div style="display:flex;flex-direction:column;gap:12px">'+
-  (has?'<label class="f">Mot de passe actuel<input id="p_cur" type="password" autocomplete="current-password"></label>':'')+
-  '<label class="f">Nouveau mot de passe<input id="p_new" type="password" autocomplete="new-password"></label><label class="f">Confirmer<input id="p_new2" type="password" autocomplete="new-password"></label><div class="err" id="p_err" role="alert"></div><button class="btn" data-act="savepw">Changer le mot de passe</button></div></div>'+
-  '<div class="box" style="max-width:480px;margin-top:16px"><h3>Données de l\'aperçu</h3><p class="lead" style="margin:0 0 12px">Les rendez-vous sont enregistrés dans ce navigateur uniquement. Pour qu\'ils soient partagés entre le gérant et les clients, il faudra brancher une base de données.</p><button class="btn ghost" data-act="reset">Remettre les rendez-vous d\'exemple</button></div>';
+  const mail=state.user?esc(state.user.email):'';
+  return '<h1>Paramètres</h1><p class="lead">Accès gérant.</p>'+
+  '<div class="box" style="max-width:480px"><h3>Compte du gérant</h3><p class="lead" style="margin:0 0 12px">Connecté en tant que <b>'+mail+'</b>.</p><div style="display:flex;flex-direction:column;gap:12px"><div class="err" id="p_err" role="alert"></div><button class="btn" data-act="savepw">Changer mon mot de passe</button><p class="lead" style="margin:0;font-size:14px">Un e-mail vous est envoyé avec un lien pour choisir un nouveau mot de passe.</p></div></div>';
 }
 function apptModal(date,time){
   const d0=date||nextOpenAvailable(new Date());
@@ -679,7 +761,7 @@ function apptModal(date,time){
   '<label class="f">Téléphone<input id="a_phone" type="tel" inputmode="tel"></label>'+
   '<label class="f">Véhicule<input id="a_car" placeholder="Ex : Clio 4"></label>'+
   '<label class="f">Immatriculation (optionnel)<input id="a_plate" placeholder="AB-123-CD" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12"></label>'+
-  '<label class="f">Service<select id="a_service">'+SERVICES.map(s=>'<option>'+s+'</option>').join('')+'</select></label>'+
+  '<label class="f">Service<select id="a_service">'+svcNames().map(s=>'<option>'+esc(s)+'</option>').join('')+'</select></label>'+
   '<div class="grid2"><label class="f">Date<input id="a_date" type="date" value="'+d0+'"></label><label class="f">Créneau<select id="a_time"></select></label></div>'+
   '<div class="err" id="a_err" role="alert"></div><div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" class="btn ghost" id="a_cancel">Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form></div></div>';
   const fill=sel=>{const dt=$('a_date').value;const free=slotsFor(dt).filter(t=>!isTaken(dt,t)&&!isPast(dt,t));
@@ -690,8 +772,9 @@ function apptModal(date,time){
     const name=$('a_name').value.trim(), dt=$('a_date').value, tm=$('a_time').value, err=$('a_err');
     if(!name) return err.textContent='Indiquez le nom du client.';
     if(!tm||isTaken(dt,tm)) return err.textContent='Choisissez un créneau libre.';
-    state.appts.push({id:state.id++,name,phone:$('a_phone').value.trim(),email:'',car:$('a_car').value.trim()||'Non précisé',plate:fmtPlate($('a_plate').value),service:$('a_service').value,date:dt,time:tm,status:'wait',source:'gérant'});
-    save(); $('modalRoot').innerHTML=''; if(proPage==='planning') planDate=dt; renderPro();
+    const id=db.collection('appts').doc().id, ap={name,phone:$('a_phone').value.trim(),email:'',car:$('a_car').value.trim()||'Non précisé',plate:fmtPlate($('a_plate').value),service:$('a_service').value,date:dt,time:tm,status:'wait',source:'gérant',createdAt:Date.now()};
+    const batch=db.batch(); batch.set(db.doc('appts/'+id),ap); batch.set(db.doc('taken/'+dt+'_'+tm),{date:dt,time:tm,apptId:id});
+    batch.commit().then(()=>{$('modalRoot').innerHTML=''; if(proPage==='planning') planDate=dt; renderPro()}).catch(ex=>{err.textContent=netErr(ex)});
   };
 }
 function docModal(){
@@ -701,9 +784,10 @@ function docModal(){
   '<label class="f">Statut<select id="d_statut"><option>En attente</option><option>Payée</option></select></label>'+
   '<div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" class="btn ghost" id="d_cancel">Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form></div></div>';
   $('d_cancel').onclick=()=>$('modalRoot').innerHTML='';
-  $('docForm').onsubmit=e=>{e.preventDefault();state.docs.unshift({n:$('d_type').value+'-'+(1000+state.docs.length+Math.floor(Math.random()*90)),client:$('d_client').value,date:ymd(new Date()),montant:parseFloat($('d_montant').value)||0,statut:$('d_statut').value});save();$('modalRoot').innerHTML='';proPage='devis';renderPro()};
+  $('docForm').onsubmit=e=>{e.preventDefault();const list=[{n:$('d_type').value+'-'+(1000+state.docs.length+Math.floor(Math.random()*90)),client:$('d_client').value.trim(),date:ymd(new Date()),montant:parseFloat($('d_montant').value)||0,statut:$('d_statut').value},...state.docs];db.doc('private/docs').set({list}).then(()=>{$('modalRoot').innerHTML='';proPage='devis';renderPro()}).catch(ex=>alert(netErr(ex)))};
 }
 
+initCloud();
 route();
 </script>
 </body>
