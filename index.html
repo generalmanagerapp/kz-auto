@@ -1024,37 +1024,54 @@ function comptaData(y){
   const dep=compta.deps.filter(d=>d.date.startsWith(Y)).sort((a,b)=>a.date.localeCompare(b.date));
   return {rec,dep};
 }
+const TVA_TAUX=[20,10,5.5,2.1,0];
+const tvaOn=()=>!!compta.ent.tva;
+const depHT=x=>x.montantHT!=null?+x.montantHT:+x.montant||0;
+const depTVA=x=>+x.tva||0;
 function comptaHtml(){
-  const {rec,dep}=comptaData(comptaYear);
-  const R=rec.reduce((s,d)=>s+totals(d).ttc,0), D=dep.reduce((s,d)=>s+(+d.montant||0),0);
+  const {rec,dep}=comptaData(comptaYear), TV=tvaOn(), sfx=TV?' HT':'';
+  const recB=d=>TV?totals(d).ht:totals(d).ttc, depB=x=>TV?depHT(x):(+x.montant||0);
+  const R=rec.reduce((s,d)=>s+recB(d),0), D=dep.reduce((s,x)=>s+depB(x),0);
+  const tvaC=rec.reduce((s,d)=>s+totals(d).tva,0), tvaD=dep.reduce((s,x)=>s+depTVA(x),0);
   const imp=compta.docs.filter(d=>d.type==='FAC'&&d.statut!=='payee').reduce((s,d)=>s+totals(d).ttc,0);
   const mois=['Janv.','Févr.','Mars','Avril','Mai','Juin','Juil.','Août','Sept.','Oct.','Nov.','Déc.'];
   const years=[...new Set([new Date().getFullYear(),...compta.docs.map(d=>+(d.payeLe||d.date).slice(0,4)),...compta.deps.map(d=>+d.date.slice(0,4))])].filter(Boolean).sort((a,b)=>b-a);
-  const rows=mois.map((m,i)=>{const k=comptaYear+'-'+String(i+1).padStart(2,'0');const r=rec.filter(d=>d.payeLe.startsWith(k)).reduce((s,d)=>s+totals(d).ttc,0),p=dep.filter(d=>d.date.startsWith(k)).reduce((s,d)=>s+(+d.montant||0),0);
+  const rows=mois.map((m,i)=>{const k=comptaYear+'-'+String(i+1).padStart(2,'0');const r=rec.filter(d=>d.payeLe.startsWith(k)).reduce((s,d)=>s+recB(d),0),p=dep.filter(d=>d.date.startsWith(k)).reduce((s,x)=>s+depB(x),0);
     return (r||p)?'<tr><td>'+m+'</td><td>'+eur(r)+'</td><td>'+eur(p)+'</td><td style="color:'+(r-p<0?'#ff8a84':'var(--ok)')+'">'+eur(r-p)+'</td></tr>':''}).join('');
-  return '<div class="top"><div><h1>Comptabilité</h1><p class="lead">Recettes = factures payées (à la date du paiement). Dépenses = ce que vous saisissez ici.</p></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="cy" style="width:auto">'+years.map(y=>'<option'+(y===comptaYear?' selected':'')+'>'+y+'</option>').join('')+'</select><button class="btn" data-act="newdep">+ Dépense</button></div></div>'+
-  '<div class="tiles"><div class="tile"><span>Recettes '+comptaYear+'</span><b style="font-size:28px">'+eur(R)+'</b></div><div class="tile"><span>Dépenses '+comptaYear+'</span><b style="font-size:28px">'+eur(D)+'</b></div><div class="tile"><span>Résultat</span><b style="font-size:28px;color:'+(R-D<0?'#ff8a84':'var(--ok)')+'">'+eur(R-D)+'</b></div><div class="tile"><span>À encaisser</span><b style="font-size:28px">'+eur(imp)+'</b></div></div>'+
-  '<div class="box tablewrap" style="margin-bottom:16px"><h3>Mois par mois</h3>'+(rows?'<table class="t"><thead><tr><th>Mois</th><th>Recettes</th><th>Dépenses</th><th>Solde</th></tr></thead><tbody>'+rows+'</tbody></table>':'<p style="color:var(--muted);margin:0">Rien pour '+comptaYear+' pour le moment.</p>')+'</div>'+
+  const tvaBox=TV?'<div class="box" style="margin-bottom:16px"><h3>TVA '+comptaYear+'</h3><div class="tiles" style="margin:12px 0 0"><div class="tile"><span>TVA collectée (factures payées)</span><b style="font-size:24px">'+eur(tvaC)+'</b></div><div class="tile"><span>TVA déductible (dépenses)</span><b style="font-size:24px">'+eur(tvaD)+'</b></div><div class="tile"><span>TVA à reverser</span><b style="font-size:24px;color:'+(tvaC-tvaD<0?'var(--ok)':'var(--warn)')+'">'+eur(tvaC-tvaD)+'</b></div></div><p class="lead" style="margin:12px 0 0;font-size:13px">Indicatif, calculé sur les montants saisis. Votre déclaration de TVA reste à faire avec votre comptable ou sur impots.gouv.fr.</p></div>':'';
+  return '<div class="top"><div><h1>Comptabilité</h1><p class="lead">Recettes = factures payées (à la date du paiement). Dépenses = ce que vous saisissez ici.'+(TV?' Montants hors taxes.':'')+'</p></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="cy" style="width:auto">'+years.map(y=>'<option'+(y===comptaYear?' selected':'')+'>'+y+'</option>').join('')+'</select><button class="btn" data-act="newdep">+ Dépense</button></div></div>'+
+  '<div class="tiles"><div class="tile"><span>Recettes '+comptaYear+sfx+'</span><b style="font-size:28px">'+eur(R)+'</b></div><div class="tile"><span>Dépenses '+comptaYear+sfx+'</span><b style="font-size:28px">'+eur(D)+'</b></div><div class="tile"><span>Résultat'+sfx+'</span><b style="font-size:28px;color:'+(R-D<0?'#ff8a84':'var(--ok)')+'">'+eur(R-D)+'</b></div><div class="tile"><span>À encaisser (TTC)</span><b style="font-size:28px">'+eur(imp)+'</b></div></div>'+tvaBox+
+  '<div class="box tablewrap" style="margin-bottom:16px"><h3>Mois par mois</h3>'+(rows?'<table class="t"><thead><tr><th>Mois</th><th>Recettes'+sfx+'</th><th>Dépenses'+sfx+'</th><th>Solde</th></tr></thead><tbody>'+rows+'</tbody></table>':'<p style="color:var(--muted);margin:0">Rien pour '+comptaYear+' pour le moment.</p>')+'</div>'+
   '<div class="box" style="margin-bottom:16px"><h3>Exports pour le comptable</h3><p class="lead" style="margin:0 0 12px;font-size:14px">Fichiers à ouvrir dans Excel. Le livre des recettes est obligatoire en micro-entreprise.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost sm" data-act="csvrec">Livre des recettes '+comptaYear+'</button><button class="btn ghost sm" data-act="csvdep">Registre des dépenses '+comptaYear+'</button><button class="btn ghost sm" data-act="csvfac">Toutes les factures '+comptaYear+'</button></div></div>'+
-  '<div class="box tablewrap"><h3>Dépenses '+comptaYear+'</h3>'+(dep.length?'<table class="t"><thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Montant</th><th>Paiement</th><th></th></tr></thead><tbody>'+
-  [...dep].reverse().map(x=>'<tr><td>'+fmtD(x.date)+'</td><td>'+esc(x.libelle)+'</td><td>'+esc(x.categorie)+'</td><td>'+eur(x.montant)+'</td><td>'+esc(x.mode||'')+'</td><td style="white-space:nowrap"><button class="mini" data-editdep="'+x.id+'">Modifier</button> <button class="mini x" data-deldep="'+x.id+'">×</button></td></tr>').join('')+'</tbody></table>':'<p style="color:var(--muted);margin:0">Aucune dépense saisie. Ajoutez vos achats de pièces, loyer, assurance… avec « + Dépense ».</p>')+'</div>';
+  '<div class="box tablewrap"><h3>Dépenses '+comptaYear+'</h3>'+(dep.length?'<table class="t"><thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th>'+(TV?'<th>HT</th><th>TVA</th>':'')+'<th>TTC</th><th>Paiement</th><th></th></tr></thead><tbody>'+
+  [...dep].reverse().map(x=>'<tr><td>'+fmtD(x.date)+'</td><td>'+esc(x.libelle)+'</td><td>'+esc(x.categorie)+'</td>'+(TV?'<td>'+eur(depHT(x))+'</td><td>'+eur(depTVA(x))+'</td>':'')+'<td>'+eur(x.montant)+'</td><td>'+esc(x.mode||'')+'</td><td style="white-space:nowrap"><button class="mini" data-editdep="'+x.id+'">Modifier</button> <button class="mini x" data-deldep="'+x.id+'">×</button></td></tr>').join('')+'</tbody></table>':'<p style="color:var(--muted);margin:0">Aucune dépense saisie. Ajoutez vos achats de pièces, loyer, assurance… avec « + Dépense ».</p>')+'</div>';
 }
 function depModal(id){
+  const TV=tvaOn();
   const x=id?compta.deps.find(d=>d.id===id):{date:ymd(new Date()),libelle:'',categorie:DEP_CATS[0],montant:'',mode:PAY_MODES[1]};
+  const taux0=x.tvaTaux!=null?+x.tvaTaux:(+compta.ent.tvaTaux||20);
+  const base0=TV?(x.montantHT!=null?x.montantHT:(x.montant?r2(x.montant):'')):(x.montant||'');
   $('modalRoot').innerHTML='<div class="modal"><div class="box"><h3>'+(id?'Modifier la dépense':'Nouvelle dépense')+'</h3><form id="depForm" style="display:flex;flex-direction:column;gap:12px">'+
   '<label class="f">Date<input id="p_date" type="date" value="'+x.date+'" required></label>'+
   '<label class="f">Libellé<input id="p_lib" value="'+esc(x.libelle)+'" maxlength="120" placeholder="Ex : plaquettes de frein (fournisseur)" required></label>'+
   '<label class="f">Catégorie<select id="p_cat">'+DEP_CATS.map(c=>'<option'+(c===x.categorie?' selected':'')+'>'+c+'</option>').join('')+'</select></label>'+
-  '<div class="grid2"><label class="f">Montant TTC (€)<input id="p_mt" value="'+esc(x.montant)+'" inputmode="decimal" required></label><label class="f">Payé par<select id="p_mode">'+PAY_MODES.map(m=>'<option'+(m===x.mode?' selected':'')+'>'+m+'</option>').join('')+'</select></label></div>'+
+  (TV?'<div class="grid2"><label class="f">Montant HT (€)<input id="p_mt" value="'+esc(base0)+'" inputmode="decimal" required></label><label class="f">Taux de TVA<select id="p_taux">'+TVA_TAUX.map(t=>'<option value="'+t+'"'+(t===taux0?' selected':'')+'>'+String(t).replace('.',',')+' %</option>').join('')+'</select></label></div><div id="p_calc" class="notice" style="margin:0"></div>'
+    :'<label class="f">Montant payé (€)<input id="p_mt" value="'+esc(base0)+'" inputmode="decimal" required></label>')+
+  '<label class="f">Payé par<select id="p_mode">'+PAY_MODES.map(m=>'<option'+(m===x.mode?' selected':'')+'>'+m+'</option>').join('')+'</select></label>'+
   '<div class="err" id="p_err2" role="alert"></div><div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" class="btn ghost" id="p_cancel">Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form></div></div>';
+  const num=v=>r2(+String(v).replace(',','.').replace(/\s/g,''));
+  const calc=()=>{if(!TV)return;const ht=num($('p_mt').value)||0,t=+$('p_taux').value,tva=r2(ht*t/100);$('p_calc').innerHTML='TVA : <b>'+eur(tva)+'</b> · Total TTC : <b>'+eur(r2(ht+tva))+'</b>'};
+  if(TV){$('p_mt').addEventListener('input',calc);$('p_taux').addEventListener('change',calc);calc()}
   $('p_cancel').onclick=()=>$('modalRoot').innerHTML='';
   $('depForm').onsubmit=ev=>{ev.preventDefault();const err=$('p_err2');
-    const mt=r2(+$('p_mt').value.replace(',','.').replace(/\s/g,''));
+    const mt=num($('p_mt').value);
     if(!(mt>0)) return err.textContent='Montant incorrect.';
     if(!$('p_lib').value.trim()) return err.textContent='Indiquez un libellé.';
     const yr=+$('p_date').value.slice(0,4);
+    const t=TV?+$('p_taux').value:0, tva=TV?r2(mt*t/100):0;
+    const data={date:$('p_date').value,libelle:$('p_lib').value.trim(),categorie:$('p_cat').value,montantHT:mt,tvaTaux:t,tva,montant:r2(mt+tva),mode:$('p_mode').value,updatedAt:Date.now()};
     const ref=id?db.doc('private/'+id):db.doc('private/dep_'+db.collection('private').doc().id);
-    ref.set({date:$('p_date').value,libelle:$('p_lib').value.trim(),categorie:$('p_cat').value,montant:mt,mode:$('p_mode').value,updatedAt:Date.now()}).then(()=>{$('modalRoot').innerHTML='';comptaYear=yr||comptaYear;renderPro()}).catch(er=>{err.textContent=netErr(er)});
+    ref.set(data).then(()=>{$('modalRoot').innerHTML='';comptaYear=yr||comptaYear;renderPro()}).catch(er=>{err.textContent=netErr(er)});
   };
 }
 function csvDownload(name,rows){
@@ -1065,8 +1082,8 @@ function csvDownload(name,rows){
 }
 function comptaExport(kind){
   const {rec,dep}=comptaData(comptaYear), Y=comptaYear;
-  if(kind==='csvrec') csvDownload('livre-recettes-'+Y+'.csv',[['Date d\'encaissement','N° facture','Client','Nature de la prestation','Montant encaissé','Mode de règlement'],...rec.map(d=>[fmtD(d.payeLe),d.num,d.client.nom,d.lignes.map(l=>l.lib).join(', '),totals(d).ttc,d.mode])]);
-  if(kind==='csvdep') csvDownload('registre-depenses-'+Y+'.csv',[['Date','Libellé','Catégorie','Montant TTC','Mode de paiement'],...dep.map(x=>[fmtD(x.date),x.libelle,x.categorie,+x.montant,x.mode])]);
+  if(kind==='csvrec') csvDownload('livre-recettes-'+Y+'.csv',[['Date d\'encaissement','N° facture','Client','Nature de la prestation','Montant HT','TVA','Montant encaissé TTC','Mode de règlement'],...rec.map(d=>{const t=totals(d);return [fmtD(d.payeLe),d.num,d.client.nom,d.lignes.map(l=>l.lib).join(', '),t.ht,t.tva,t.ttc,d.mode]})]);
+  if(kind==='csvdep') csvDownload('registre-depenses-'+Y+'.csv',[['Date','Libellé','Catégorie','Montant HT','TVA','Montant TTC','Mode de paiement'],...dep.map(x=>[fmtD(x.date),x.libelle,x.categorie,depHT(x),depTVA(x),+x.montant,x.mode])]);
   if(kind==='csvfac') csvDownload('factures-'+Y+'.csv',[['N°','Date','Client','Véhicule','Immatriculation','Total HT','TVA','Total TTC','Statut','Payée le','Mode'],...compta.docs.filter(d=>d.type==='FAC'&&d.date.startsWith(String(Y))).sort((a,b)=>a.num.localeCompare(b.num)).map(d=>{const t=totals(d);return [d.num,fmtD(d.date),d.client.nom,d.vehicule,d.plaque,t.ht,t.tva,t.ttc,d.statut==='payee'?'Payée':'À encaisser',fmtD(d.payeLe),d.mode]})]);
 }
 function bindCompta(){
