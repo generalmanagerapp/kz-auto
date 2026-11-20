@@ -62,6 +62,13 @@ section.block .sub{text-align:center;color:var(--muted);margin:0 auto 36px;max-w
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
 .card h3{font-size:24px;margin:10px 0 6px}
 .card p{margin:0;color:var(--muted);font-size:15px}
+.card.svc{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;position:relative;transition:border-color .15s,transform .15s}
+.card.svc:hover,.card.svc:focus-visible{border-color:var(--red);transform:translateY(-2px);outline:none}
+.card.svc .more{display:block;margin-top:12px;color:var(--red);font-weight:700;font-size:14px}
+.svcm .price{font-family:var(--display);font-size:34px;font-weight:800;margin:6px 0 4px}
+.svcm .price small{display:block;font-family:inherit;font-size:13px;font-weight:400;color:var(--muted);margin-top:2px}
+.svcm p{color:var(--muted);margin:10px 0 0;white-space:pre-line}
+.svcm .acts{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:22px}
 .ico{width:42px;height:42px;border-radius:10px;background:rgba(224,34,27,.12);color:var(--red);display:grid;place-items:center}
 .ico svg{width:22px;height:22px}
 .rating{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;align-items:stretch}
@@ -206,14 +213,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
     <div class="wrap">
       <h2>Notre expertise</h2>
       <p class="sub">Un atelier indépendant pour entretenir et réparer votre véhicule, quelle que soit la marque.</p>
-      <div class="cards">
-        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></div><h3>Mécanique</h3><p>Diagnostic précis, réparations, embrayage, distribution.</p></div>
-        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><h3>Révision et vidange</h3><p>Entretien périodique selon le carnet constructeur.</p></div>
-        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg></div><h3>Pneumatiques</h3><p>Montage, équilibrage, passage été et hiver.</p></div>
-        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg></div><h3>Freins et plaquettes</h3><p>Contrôle, remplacement, purge du circuit.</p></div>
-        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14h16M6 14l1.5-5h9L18 14M7 18h.01M17 18h.01"/></svg></div><h3>Service rapide</h3><p>Petites interventions sur créneau libre, sans attente.</p></div>
-        <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg></div><h3>Climatisation</h3><p>Recharge, contrôle d'étanchéité et réparation.</p></div>
-      </div>
+      <div class="cards" id="expertiseList"></div>
     </div>
   </section>
 
@@ -338,7 +338,16 @@ const DEFAULT_HOURS = {
 };
 let SLOT_MIN = DEFAULT_SLOT_MIN;
 let HOURS = DEFAULT_HOURS;
-const DEFAULT_SERVICES = ['Révision','Vidange','Diagnostic moteur','Freins et plaquettes','Pneumatiques','Climatisation'];
+const DEFAULT_SERVICES = [
+  {name:'Mécanique',desc:'Diagnostic précis, réparations, embrayage, distribution.'},
+  {name:'Révision et vidange',desc:'Entretien périodique selon le carnet constructeur.'},
+  {name:'Pneumatiques',desc:'Montage, équilibrage, passage été et hiver.'},
+  {name:'Freins et plaquettes',desc:'Contrôle, remplacement, purge du circuit.'},
+  {name:'Service rapide',desc:'Petites interventions sur créneau libre, sans attente.'},
+  {name:'Climatisation',desc:'Recharge, contrôle d\'étanchéité et réparation.'}
+];
+const SVC_ICONS=['<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>','<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>','<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>','<path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/>','<path d="M4 14h16M6 14l1.5-5h9L18 14M7 18h.01M17 18h.01"/>','<path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/>'];
+const defDesc=n=>{const d=DEFAULT_SERVICES.find(x=>x.name.toLowerCase()===String(n).toLowerCase());return d?d.desc:''};
 const DAYS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
 const STATUS = { wait:'À prendre en charge', prog:'En cours (atelier)', done:'Terminé (prêt)' };
 
@@ -351,7 +360,7 @@ function ensureSettings(){
   const s=state.settings=state.settings||{};
   s.hours=s.hours||JSON.parse(JSON.stringify(DEFAULT_HOURS));
   s.slot=s.slot||DEFAULT_SLOT_MIN; s.closed=s.closed||[];
-  s.services=s.services||DEFAULT_SERVICES.map(n=>({name:n,amount:0,from:false}));
+  s.services=s.services||DEFAULT_SERVICES.map(x=>({name:x.name,amount:0,from:false,desc:x.desc}));
   HOURS=s.hours; SLOT_MIN=s.slot;
 }
 ensureSettings();
@@ -369,7 +378,7 @@ function applyConfig(d){
   if(d.hours) s.hours=hoursFromDb(d.hours);
   if(d.slot) s.slot=d.slot;
   s.closed=Array.isArray(d.closed)?d.closed:[];
-  if(Array.isArray(d.services)) s.services=d.services.map(x=>({name:String(x.name||''),amount:+x.amount||0,from:!!x.from})).filter(x=>x.name);
+  if(Array.isArray(d.services)) s.services=d.services.map(x=>({name:String(x.name||''),amount:+x.amount||0,from:!!x.from,desc:String(x.desc!=null?x.desc:defDesc(x.name)).slice(0,300)})).filter(x=>x.name);
   ensureSettings();
 }
 function saveConfig(){
@@ -449,7 +458,7 @@ function show(v){views.forEach(x=>document.getElementById('v-'+x).classList.togg
 let proPage='dash';
 function route(){
   const h=location.hash.replace('#','');
-  if(h==='rdv'){show('rdv');initBooking();window.scrollTo(0,0);return}
+  if(h==='rdv'){show('rdv');initBooking();if(pendingSvc){const sl=$('b_service');if(sl&&svcNames().includes(pendingSvc)){sl.value=pendingSvc;renderPrices();updateWa()}pendingSvc=null}window.scrollTo(0,0);return}
   if(h==='pro'){ if(state.pro){show('pro');renderPro()} else {show('login');renderLogin()} window.scrollTo(0,0);return}
   show('home');
   const el=h&&document.getElementById(h); if(el) el.scrollIntoView(); else window.scrollTo(0,0);
@@ -469,6 +478,27 @@ function renderHours(){
 }
 renderHours();
 function priceLabel(svc){const p=state.settings.services.find(x=>x.name===svc);if(!p||!(p.amount>0))return '';const a=Number(p.amount).toLocaleString('fr-FR',{minimumFractionDigits:p.amount%1?2:0,maximumFractionDigits:2});return (p.from?'à partir de ':'')+a+' €'}
+function renderExpertise(){
+  const box=$('expertiseList'); if(!box) return;
+  if(!ready.cfg&&!cloudErr){box.innerHTML='';return}
+  box.innerHTML=state.settings.services.map((x,i)=>'<button type="button" class="card svc" data-svc="'+i+'"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'+SVC_ICONS[i%SVC_ICONS.length]+'</svg></div><h3>'+esc(x.name)+'</h3>'+(x.desc?'<p>'+esc(x.desc)+'</p>':'')+'<span class="more">Voir le tarif ›</span></button>').join('');
+  box.querySelectorAll('[data-svc]').forEach(b=>b.addEventListener('click',()=>svcModal(+b.dataset.svc,b)));
+}
+function svcModal(i,opener){
+  const x=state.settings.services[i]; if(!x) return;
+  const root=$('modalRoot'), l=priceLabel(x.name);
+  root.innerHTML='<div class="modal" id="svcOverlay"><div class="box svcm" role="dialog" aria-modal="true" aria-labelledby="svcT"><h3 id="svcT" style="font-size:28px;margin:0">'+esc(x.name)+'</h3>'+
+  '<div class="price">'+(l?esc(l)+'<small>TTC, indicatif. Le prix définitif est confirmé à l\'atelier.</small>':'<span style="font-size:22px">Sur devis</span><small>Le prix dépend de votre véhicule : appelez-nous ou prenez rendez-vous.</small>')+'</div>'+
+  (x.desc?'<p>'+esc(x.desc)+'</p>':'')+
+  '<div class="acts"><button type="button" class="btn ghost" id="svcClose">Fermer</button><a class="btn" id="svcRdv" href="#rdv">Prendre rendez-vous</a></div></div></div>';
+  const close=()=>{root.innerHTML='';document.removeEventListener('keydown',onKey);if(opener&&opener.focus)opener.focus()};
+  const onKey=e=>{if(e.key==='Escape')close()};
+  document.addEventListener('keydown',onKey);
+  $('svcClose').onclick=close; $('svcOverlay').addEventListener('click',e=>{if(e.target.id==='svcOverlay')close()});
+  $('svcRdv').addEventListener('click',()=>{root.innerHTML='';document.removeEventListener('keydown',onKey);pendingSvc=x.name});
+  $('svcClose').focus();
+}
+let pendingSvc=null;
 function renderPrices(){
   const sel=$('b_service');
   if(sel){
@@ -477,6 +507,7 @@ function renderPrices(){
     if(svcNames().includes(cur)) sel.value=cur;
     const l=priceLabel(sel.value); $('priceHint').textContent=l?'Tarif indicatif : '+l+' TTC. Le prix définitif est confirmé à l\'atelier.':'';
   }
+  renderExpertise();
   const priced=svcNames().filter(n=>priceLabel(n));
   $('tarifsList').innerHTML=priced.map(n=>'<div class="card"><h3 style="font-size:20px">'+esc(n)+'</h3><p style="color:var(--text);font-size:20px;font-weight:700">'+priceLabel(n)+'</p></div>').join('');
   $('tarifs').classList.toggle('hidden',!priced.length);
@@ -676,7 +707,7 @@ function bindPro(){
     if(a==='gotorv'){proPage='rdv';renderPro()}
     if(a==='goplanning'){proPage='planning';renderPro()}
     if(a==='newrdv') apptModal(proPage==='planning'?planDate:null);
-    if(a==='addsvc'){readSvcDraft();state.settings.services.push({name:'',amount:0,from:false});renderPro();const l=$('sv_'+(state.settings.services.length-1));if(l)l.focus()}
+    if(a==='addsvc'){readSvcDraft();state.settings.services.push({name:'',amount:0,from:false,desc:''});renderPro();const l=$('sv_'+(state.settings.services.length-1));if(l)l.focus()}
     if(a==='saveprices'){
       const err=$('pr_err'); err.style.color='';
       const list=readSvcDraft(), seen=new Set();
@@ -688,7 +719,7 @@ function bindPro(){
         seen.add(x.name.toLowerCase());
         if(x.bad){err.textContent=x.name+' : prix incorrect.';return}
       }
-      state.settings.services=list.map(x=>({name:x.name,amount:x.amount,from:x.from}));
+      state.settings.services=list.map(x=>({name:x.name,amount:x.amount,from:x.from,desc:x.desc}));
       saveConfig().then(()=>{renderPrices();err.style.color='var(--ok)';err.textContent='Prestations enregistrées.'}).catch(ex=>{err.textContent=netErr(ex)});
     }
     if(a==='savehours'){
@@ -758,14 +789,14 @@ function readSvcDraft(){
     const n=$('sv_'+i); if(!n) return;
     const raw=$('pr_'+i).value.trim().replace(',','.'); let amount=0, bad=false;
     if(raw!==''){const v=Number(raw); if(!isFinite(v)||v<0) bad=true; else amount=Math.round(v*100)/100}
-    out.push({name:n.value.trim(),amount,from:$('pf_'+i).checked,bad});
+    out.push({name:n.value.trim(),amount,from:$('pf_'+i).checked,desc:($('ds_'+i)?$('ds_'+i).value.trim():'').slice(0,300),bad});
   });
-  if(out.length) state.settings.services=out.map(x=>({name:x.name,amount:x.amount,from:x.from}));
+  if(out.length) state.settings.services=out.map(x=>({name:x.name,amount:x.amount,from:x.from,desc:x.desc}));
   return out;
 }
 function tarifsHtml(){
-  const row=(x,i)=>'<tr><td><input class="hh" id="sv_'+i+'" value="'+esc(x.name)+'" placeholder="Nom de la prestation" maxlength="60" style="width:100%;min-width:160px"></td><td><input class="hh" type="number" min="0" step="0.5" id="pr_'+i+'" value="'+(x.amount>0?x.amount:'')+'" placeholder="Sur devis" style="width:110px"> €</td><td><label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="pf_'+i+'"'+(x.from?' checked':'')+'> à partir de</label></td><td><button class="mini x" data-delsvc="'+i+'" title="Retirer cette prestation">Retirer</button></td></tr>';
-  return '<h1>Prestations et tarifs</h1><p class="lead">Vos prestations s\'affichent sur le site et dans le choix du service à la prise de rendez-vous. Un prix vide veut dire « sur devis » : rien ne s\'affiche. « Autre » est toujours proposé en dernier.</p>'+
+  const row=(x,i)=>'<tr><td><input class="hh" id="sv_'+i+'" value="'+esc(x.name)+'" placeholder="Nom de la prestation" maxlength="60" style="width:100%;min-width:160px"><textarea class="hh" id="ds_'+i+'" rows="2" maxlength="300" placeholder="Description affichée quand le client clique (optionnel)" style="width:100%;margin-top:6px;resize:vertical;font:inherit">'+esc(x.desc||'')+'</textarea></td><td><input class="hh" type="number" min="0" step="0.5" id="pr_'+i+'" value="'+(x.amount>0?x.amount:'')+'" placeholder="Sur devis" style="width:110px"> €</td><td><label style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="pf_'+i+'"'+(x.from?' checked':'')+'> à partir de</label></td><td><button class="mini x" data-delsvc="'+i+'" title="Retirer cette prestation">Retirer</button></td></tr>';
+  return '<h1>Prestations et tarifs</h1><p class="lead">Chaque prestation devient une carte cliquable sur le site : le client voit la description et le prix, puis peut prendre rendez-vous. Elle apparaît aussi dans le choix du service à la prise de rendez-vous. Un prix vide veut dire « sur devis » : rien ne s\'affiche. « Autre » est toujours proposé en dernier.</p>'+
   '<div class="box tablewrap"><table class="t"><thead><tr><th>Prestation</th><th>Prix TTC</th><th>Affichage</th><th></th></tr></thead><tbody>'+state.settings.services.map(row).join('')+'</tbody></table>'+
   '<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn ghost" data-act="addsvc">+ Ajouter une prestation</button><button class="btn" data-act="saveprices">Enregistrer</button></div><div class="err" id="pr_err" role="alert"></div></div>';
 }
