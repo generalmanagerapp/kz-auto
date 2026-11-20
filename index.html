@@ -550,15 +550,19 @@ function renderLogin(){
   f.innerHTML='<label class="f">E-mail<input id="l_mail" type="email" autocomplete="username" inputmode="email"></label>'+
     '<label class="f">Mot de passe<input id="l_pass" type="password" autocomplete="current-password"></label>'+
     '<div class="err" id="loginErr" role="alert"></div><button class="btn" type="submit">Accéder au dashboard</button>'+
+    '<button class="btn ghost" type="button" id="l_first">Première connexion : créer mon mot de passe</button>'+
     '<button class="btn ghost" type="button" id="l_forgot">Mot de passe oublié ?</button>';
   if(loginMsg){$('loginErr').textContent=loginMsg;loginMsg=''}
   $('loginNote').textContent='Accès réservé au gérant du garage.';
-  $('l_forgot').addEventListener('click',()=>{
+  const envoyerLien=(premiere)=>{
     const m=$('l_mail').value.trim(), err=$('loginErr'); err.style.color='';
     if(!m) return err.textContent='Indiquez votre e-mail ci-dessus, puis cliquez à nouveau.';
     if(!auth) return err.textContent='Service indisponible pour le moment.';
-    auth.sendPasswordResetEmail(m).then(()=>{err.style.color='var(--ok)';err.textContent='Si ce compte existe, un e-mail pour changer le mot de passe vient d\'être envoyé.'}).catch(()=>{err.textContent='Impossible d\'envoyer l\'e-mail pour le moment.'});
-  });
+    auth.languageCode='fr';
+    auth.sendPasswordResetEmail(m).then(()=>{err.style.color='var(--ok)';err.textContent=premiere?'Si cet e-mail est celui du gérant, un lien vient d\'être envoyé : ouvrez-le pour choisir votre mot de passe, puis revenez ici vous connecter.':'Si ce compte existe, un e-mail pour changer le mot de passe vient d\'être envoyé.'}).catch(()=>{err.textContent='Impossible d\'envoyer l\'e-mail pour le moment.'});
+  };
+  $('l_first').addEventListener('click',()=>envoyerLien(true));
+  $('l_forgot').addEventListener('click',()=>envoyerLien(false));
 }
 $('loginForm').addEventListener('submit',e=>{
   e.preventDefault();
