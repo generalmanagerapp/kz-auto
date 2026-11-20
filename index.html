@@ -381,12 +381,20 @@ function initCloud(){
   db.collection('taken').onSnapshot(snap=>{const t={};snap.forEach(d=>{t[d.id]=d.data()});state.taken=t;ready.taken=true;cloudErr='';refreshAll()},bad);
   auth.onAuthStateChanged(onAuth);
 }
+const GERANT_EMAIL='kz.autos42@gmail.com';
+let creating=false;
+const estGerant=u=>(u.email||'').toLowerCase()===GERANT_EMAIL;
 async function onAuth(user){
+  if(creating) return;
   stopAdmin();
   if(!user){state.pro=false;state.user=null;authReady=true;route();return}
   try{
-    const a=await db.doc('admin/'+user.uid).get();
-    if(!a.exists){loginMsg='Ce compte n\'a pas accès à l\'espace gérant.';await auth.signOut();return}
+    if(estGerant(user)&&!user.emailVerified){
+      try{auth.languageCode='fr';await user.sendEmailVerification()}catch(e){}
+      loginMsg='Confirmez d\'abord votre adresse : un e-mail de vérification vient d\'être envoyé à '+GERANT_EMAIL+'. Cliquez sur le lien, puis reconnectez-vous.';
+      await auth.signOut();return}
+    const ok=estGerant(user)||(await db.doc('admin/'+user.uid).get()).exists;
+    if(!ok){loginMsg='Ce compte n\'a pas accès à l\'espace gérant.';await auth.signOut();return}
     state.pro=true; state.user=user; startAdmin();
   }catch(e){state.pro=false;loginMsg='Impossible de vérifier votre accès. Réessayez.'}
   authReady=true; route();
@@ -550,7 +558,7 @@ function renderLogin(){
   f.innerHTML='<label class="f">E-mail<input id="l_mail" type="email" autocomplete="username" inputmode="email"></label>'+
     '<label class="f">Mot de passe<input id="l_pass" type="password" autocomplete="current-password"></label>'+
     '<div class="err" id="loginErr" role="alert"></div><button class="btn" type="submit">Accéder au dashboard</button>'+
-    '<button class="btn ghost" type="button" id="l_first">Première connexion : créer mon mot de passe</button>'+
+    '<button class="btn ghost" type="button" id="l_first">Première connexion : créer mon compte</button>'+
     '<button class="btn ghost" type="button" id="l_forgot">Mot de passe oublié ?</button>';
   if(loginMsg){$('loginErr').textContent=loginMsg;loginMsg=''}
   $('loginNote').textContent='Accès réservé au gérant du garage.';
@@ -561,7 +569,23 @@ function renderLogin(){
     auth.languageCode='fr';
     auth.sendPasswordResetEmail(m).then(()=>{err.style.color='var(--ok)';err.textContent=premiere?'Si cet e-mail est celui du gérant, un lien vient d\'être envoyé : ouvrez-le pour choisir votre mot de passe, puis revenez ici vous connecter.':'Si ce compte existe, un e-mail pour changer le mot de passe vient d\'être envoyé.'}).catch(()=>{err.textContent='Impossible d\'envoyer l\'e-mail pour le moment.'});
   };
-  $('l_first').addEventListener('click',()=>envoyerLien(true));
+  $('l_first').addEventListener('click',async()=>{
+    const m=$('l_mail').value.trim().toLowerCase(), p=$('l_pass').value, err=$('loginErr'); err.style.color='';
+    if(!auth) return err.textContent='Service indisponible pour le moment.';
+    if(m!==GERANT_EMAIL) return err.textContent='La création de compte est réservée à l\'e-mail du gérant.';
+    if(p.length<8) return err.textContent='Choisissez un mot de passe d\'au moins 8 caractères dans le champ ci-dessus.';
+    creating=true;
+    try{
+      auth.languageCode='fr';
+      const c=await auth.createUserWithEmailAndPassword(m,p);
+      await c.user.sendEmailVerification();
+      await auth.signOut();
+      err.style.color='var(--ok)';err.textContent='Compte créé. Ouvrez l\'e-mail envoyé à '+m+' et cliquez sur le lien pour le confirmer, puis connectez-vous ici.';
+    }catch(ex){
+      const c=ex&&ex.code;
+      err.textContent=c==='auth/email-already-in-use'?'Ce compte existe déjà : connectez-vous, ou utilisez « Mot de passe oublié ? ».':c==='auth/weak-password'?'Mot de passe trop faible.':(c==='auth/operation-not-allowed'||c==='auth/admin-restricted-operation')?'La création de compte n\'est pas encore ouverte.':'Création impossible pour le moment.';
+    }finally{creating=false}
+  });
   $('l_forgot').addEventListener('click',()=>envoyerLien(false));
 }
 $('loginForm').addEventListener('submit',e=>{
