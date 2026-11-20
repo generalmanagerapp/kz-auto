@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Garage KZ Autos</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
@@ -28,7 +30,7 @@ h1,h2,h3{font-family:var(--display);margin:0;line-height:1.05;text-wrap:balance}
 .nav{position:sticky;top:0;z-index:20;background:rgba(11,11,12,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
 .nav .wrap{display:flex;align-items:center;justify-content:space-between;height:60px;gap:12px}
 .brand{font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:.02em;display:flex;align-items:center;gap:10px}
-.brand i{display:inline-grid;place-items:center;width:30px;height:30px;border:2px solid var(--red);border-radius:50%;font-style:normal;font-size:13px;color:var(--red)}
+.brand img{width:44px;height:44px;border-radius:50%;display:block}
 .brand b{color:var(--red)}
 .nav-links{display:flex;align-items:center;gap:22px;font-weight:600}
 .nav-links a:hover{color:var(--red)}
@@ -170,7 +172,7 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
 
 <header class="nav">
   <div class="wrap">
-    <a class="brand" href="#top" data-go="home"><i>KZ</i><span><b>KZ</b> AUTOS</span></a>
+    <a class="brand" href="#top" data-go="home"><img src="logo.png" alt="Logo KZ Autos" width="44" height="44"><span><b>KZ</b> AUTOS</span></a>
     <nav class="nav-links" id="publicNav">
       <a class="hide-s" href="#top" data-go="home">Accueil</a>
       <a class="hide-s" href="#expertise" data-go="home">Expertise</a>
