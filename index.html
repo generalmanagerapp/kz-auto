@@ -69,6 +69,11 @@ section.block .sub{text-align:center;color:var(--muted);margin:0 auto 36px;max-w
 .svcm .price small{display:block;font-family:inherit;font-size:13px;font-weight:400;color:var(--muted);margin-top:2px}
 .svcm p{color:var(--muted);margin:10px 0 0;white-space:pre-line}
 .svcm .acts{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:22px}
+.pw{position:relative;display:block}
+.pw input{width:100%;padding-right:48px}
+.eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:38px;height:38px;display:grid;place-items:center;background:none;border:0;border-radius:8px;color:var(--muted);cursor:pointer}
+.eye:hover,.eye:focus-visible{color:var(--text);outline:none;background:rgba(255,255,255,.08)}
+.eye svg{width:22px;height:22px}
 .ico{width:42px;height:42px;border-radius:10px;background:rgba(224,34,27,.12);color:var(--red);display:grid;place-items:center}
 .ico svg{width:22px;height:22px}
 .rating{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;align-items:stretch}
@@ -593,7 +598,7 @@ function renderLogin(){
   const f=$('loginForm');
   if(!authReady){ f.innerHTML='<p style="margin:0;color:var(--muted)">Vérification de la connexion…</p>'; $('loginNote').textContent=''; return }
   f.innerHTML='<label class="f">E-mail<input id="l_mail" type="email" autocomplete="username" inputmode="email"></label>'+
-    '<label class="f">Mot de passe<input id="l_pass" type="password" autocomplete="current-password"></label>'+
+    '<label class="f">Mot de passe<span class="pw"><input id="l_pass" type="password" autocomplete="current-password"><button type="button" class="eye" id="l_eye" aria-label="Afficher le mot de passe" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18" style="display:none"/></svg></button></span></label>'+
     '<div class="err" id="loginErr" role="alert"></div><button class="btn" type="submit">Accéder au dashboard</button>'+
     '<button class="btn ghost" type="button" id="l_first">Première connexion : créer mon compte</button>'+
     '<button class="btn ghost" type="button" id="l_forgot">Mot de passe oublié ?</button>';
@@ -606,6 +611,9 @@ function renderLogin(){
     auth.languageCode='fr';
     auth.sendPasswordResetEmail(m).then(()=>{err.style.color='var(--ok)';err.textContent=premiere?'Si cet e-mail est celui du gérant, un lien vient d\'être envoyé : ouvrez-le pour choisir votre mot de passe, puis revenez ici vous connecter.':'Si ce compte existe, un e-mail pour changer le mot de passe vient d\'être envoyé.'}).catch(()=>{err.textContent='Impossible d\'envoyer l\'e-mail pour le moment.'});
   };
+  $('l_eye').addEventListener('click',()=>{const i=$('l_pass'),show=i.type==='password';i.type=show?'text':'password';
+    $('l_eye').setAttribute('aria-pressed',show);$('l_eye').setAttribute('aria-label',show?'Masquer le mot de passe':'Afficher le mot de passe');
+    $('l_eye').querySelector('.slash').style.display=show?'':'none';i.focus()});
   $('l_first').addEventListener('click',async()=>{
     const m=$('l_mail').value.trim().toLowerCase(), p=$('l_pass').value, err=$('loginErr'); err.style.color='';
     if(!auth) return err.textContent='Service indisponible pour le moment.';
