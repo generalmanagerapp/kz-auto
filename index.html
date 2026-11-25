@@ -268,14 +268,15 @@ table.t td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-nu
     <div class="page-title"><h1>Prendre Rendez-vous</h1><p>Choisissez un créneau libre ou envoyez-nous un WhatsApp directement.</p></div>
     <div class="form-card" id="formCard">
       <form id="bookForm" novalidate>
+        <div aria-hidden="true" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden"><label>Ne pas remplir<input id="b_site" name="website" tabindex="-1" autocomplete="off"></label></div>
         <div class="grid2">
-          <label class="f">Nom complet<input id="b_name" autocomplete="name" placeholder="Prénom Nom"></label>
+          <label class="f">Nom complet<input id="b_name" autocomplete="name" placeholder="Prénom Nom" maxlength="60"></label>
           <label class="f">Service
             <select id="b_service"></select><small id="priceHint" style="color:var(--muted);font-weight:400"></small></label>
-          <label class="f">Téléphone<input id="b_phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78"></label>
+          <label class="f">Téléphone<input id="b_phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" maxlength="20"></label>
           <label class="f">Date disponible<input id="b_date" type="date"></label>
-          <label class="f">Email (optionnel)<input id="b_email" type="email" autocomplete="email" placeholder="vous@exemple.fr"></label>
-          <label class="f">Modèle du véhicule<input id="b_car" placeholder="Ex : Clio 4"></label>
+          <label class="f">Email (optionnel)<input id="b_email" type="email" autocomplete="email" placeholder="vous@exemple.fr" maxlength="80"></label>
+          <label class="f">Modèle du véhicule<input id="b_car" placeholder="Ex : Clio 4" maxlength="60"></label>
           <label class="f">Immatriculation<input id="b_plate" placeholder="AB-123-CD" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12"></label>
 
           <div class="full">
@@ -566,9 +567,24 @@ $('b_service').addEventListener('change',renderPrices);
 renderPrices();
 $('b_plate').addEventListener('blur',()=>{$('b_plate').value=fmtPlate($('b_plate').value)});
 $('b_date').addEventListener('change',()=>{chosen=null;renderSlots();updateWa()});
+/* Anti-spam des demandes : piège à robots, temps minimum, limite par appareil */
+let formStart=0;
+['b_name','b_phone','b_email','b_car','b_plate'].forEach(id=>$(id).addEventListener('input',()=>{if(!formStart)formStart=Date.now()}));
+const RDV_MAX_24H=3, RDV_PAUSE_MS=60000;
+function rdvHist(){try{const h=JSON.parse(localStorage.getItem('kz_rdv')||'[]');return Array.isArray(h)?h.filter(t=>Date.now()-t<864e5):[]}catch(e){return[]}}
+function rdvNote(){try{const h=rdvHist();h.push(Date.now());localStorage.setItem('kz_rdv',JSON.stringify(h))}catch(e){}}
+function rdvBloque(){const h=rdvHist();
+  if(h.length&&Date.now()-h[h.length-1]<RDV_PAUSE_MS) return 'Une demande vient d\'être envoyée. Patientez une minute avant d\'en refaire une.';
+  if(h.length>=RDV_MAX_24H) return 'Vous avez déjà envoyé plusieurs demandes aujourd\'hui. Appelez-nous au '+GARAGE.tel+' ou écrivez-nous sur WhatsApp.';
+  return ''}
 $('bookForm').addEventListener('submit',e=>{
   e.preventDefault();
   const f=getForm(), err=$('formErr');
+  if($('b_site').value) return err.textContent='';
+  if(!formStart||Date.now()-formStart<4000) return err.textContent='Vérifiez vos informations puis réessayez dans un instant.';
+  const bl=rdvBloque(); if(bl) return err.textContent=bl;
+  if(!/[A-Za-zÀ-ÿ]{2}/.test(f.name)) return err.textContent='Indiquez votre nom.';
+  if(f.phone.replace(/\D/g,'').length>15) return err.textContent='Ce numéro de téléphone semble incorrect.';
   if(!f.name) return err.textContent='Indiquez votre nom.';
   if(f.phone.replace(/\D/g,'').length<10) return err.textContent='Indiquez un numéro de téléphone à 10 chiffres.';
   if(f.email&&!/^\S+@\S+\.\S+$/.test(f.email)) return err.textContent='Cet email semble incorrect.';
@@ -584,6 +600,7 @@ $('bookForm').addEventListener('submit',e=>{
   batch.set(db.doc('appts/'+apptId),a);
   batch.set(db.doc('taken/'+date+'_'+time),{date,time,apptId});
   batch.commit().then(()=>{
+    rdvNote();
     const msg='Bonjour, c\'est '+f.name+'. Je confirme mon rendez-vous du '+fmtDate(date)+' à '+time.replace(':','h')+' pour : '+f.service+' ('+f.car+', '+f.plate+').';
     $('formCard').innerHTML='<div class="success"><h2>Demande envoyée !</h2><p>Votre créneau du <b>'+fmtDate(date)+' à '+time.replace(':','h')+'</b> est réservé. Il n\'est plus proposé aux autres clients.</p><div class="row"><a class="btn wa-solid" target="_blank" rel="noopener" href="https://wa.me/'+GARAGE.wa+'?text='+encodeURIComponent(msg)+'">Confirmer sur WhatsApp</a><button class="btn ghost" id="again">Nouvelle réservation</button></div></div>';
     $('again').addEventListener('click',()=>location.reload());
